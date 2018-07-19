@@ -451,9 +451,12 @@ class PostgresqlStorage(BaseStorage):
 
         await self.initialize_tid_statements()
 
-    async def restart_connection(self):
+    async def restart_connection(self, timeout=0.1):
         log.error('Connection potentially lost to pg, restarting')
-        await self._pool.close()
+        try:
+            await asyncio.wait_for(self._pool.close(), timeout)
+        except asyncio.TimeoutError:
+            pass
         self._pool.terminate()
         # re-bind, throw conflict error so the request is restarted...
         self._pool = await asyncpg.create_pool(
@@ -565,9 +568,10 @@ ALTER TABLE blobs ALTER COLUMN zoid TYPE varchar({MAX_OID_LENGTH})''')
 
     async def close(self, con):
         try:
-            await shield(self._pool.release(con))
-        except (asyncio.CancelledError, asyncpg.exceptions.ConnectionDoesNotExistError,
-                RuntimeError):
+            await shield(
+                asyncio.wait_for(self._pool.release(con, timeout=1), 1))
+        except (asyncio.CancelledError, RuntimeError, asyncio.TimeoutError,
+                asyncpg.exceptions.ConnectionDoesNotExistError):
             pass
 
     async def load(self, txn, oid):

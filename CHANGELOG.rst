@@ -1,6 +1,9 @@
 4.1.4 (unreleased)
 ------------------
 
+- upgrade shipped asyncpg version
+  [vangheem]
+
 - Option to disable inheritance on role permission relation
   [bloodbare]
 
