@@ -71,7 +71,8 @@ class TransactionManager:
             # re-use txn if possible
             txn = request._txn
             txn.status = Status.ACTIVE
-            if txn._db_conn is not None:
+            if (txn._db_conn is not None and
+                    getattr(txn._db_conn, '_in_use', None) is None):
                 try:
                     await self._close_txn(txn)
                 except Exception:
