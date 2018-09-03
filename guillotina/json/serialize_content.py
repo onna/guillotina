@@ -61,11 +61,11 @@ class SerializeToJson(object):
             '@type': self.context.type_name,
             '@name': self.context.__name__,
             '@uid': self.context.uuid,
-            'parent': parent_summary,
-            'is_folderish': IFolder.providedBy(self.context),
+            'parent': parent_summary,  # should be @parent
+            'is_folderish': IFolder.providedBy(self.context),  # eek, should be @folderish?
             'creation_date': json_compatible(self.context.creation_date),
             'modification_date': json_compatible(self.context.modification_date),
-            'UID': self.context.uuid,
+            'UID': self.context.uuid,  # should be removed
         }
 
         factory = get_cached_factory(self.context.type_name)

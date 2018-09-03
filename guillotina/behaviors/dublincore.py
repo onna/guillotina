@@ -85,7 +85,8 @@ class IDublinCore(Interface):
     title="Dublin Core fields",
     provides=IDublinCore,
     marker=IMarkerDublinCore,
-    for_="guillotina.interfaces.IResource")
+    for_="guillotina.interfaces.IResource",
+    alias="dublincore")
 class DublinCore(AnnotationBehavior):
     auto_serialize = True
 

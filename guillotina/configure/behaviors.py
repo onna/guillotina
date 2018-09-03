@@ -18,7 +18,7 @@ REGISTRATION_REPR = """\
 class BehaviorRegistration(object):
 
     def __init__(self, title, description, interface,
-                 marker, factory, name=None, for_=Interface):
+                 marker, factory, name=None, for_=Interface, alias=None):
         self.title = title
         self.description = description
         self.interface = interface
@@ -26,6 +26,7 @@ class BehaviorRegistration(object):
         self.factory = factory
         self.name = name
         self.for_ = for_
+        self.alias = alias
 
     def __repr__(self):
         if self.marker is not None:
@@ -42,7 +43,8 @@ class BehaviorRegistration(object):
             'marker': marker_info,
             'factory': str(self.factory),
             'title': self.title or '(no title)',
-            'description': self.description or '(no description)'
+            'description': self.description or '(no description)',
+            'alias': self.alias
         }
         return REGISTRATION_REPR.format(**info)
 

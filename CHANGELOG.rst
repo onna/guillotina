@@ -1,7 +1,13 @@
-4.1.7 (unreleased)
+4.2.0 (unreleased)
 ------------------
 
-- Nothing changed yet.
+- Be able to configure behavior directly against a schema instead
+  of needing to define concret behavior
+  [vangheem]
+
+- Be able to reference behavior data with alias instead of full
+  interface dotted name.
+  [vangheem]
 
 
 4.1.6 (2018-08-31)
