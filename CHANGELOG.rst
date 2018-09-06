@@ -1,7 +1,7 @@
-3.2.17 (unreleased)
+3.2.16-1
 -------------------
 
-- Nothing changed yet.
+- Temporary backport of some db changes ahead of Guillotina 4 upgrade
 
 
 3.2.16 (2018-07-16)
