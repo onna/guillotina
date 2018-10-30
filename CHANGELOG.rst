@@ -1,3 +1,11 @@
+3.2.17-1
+-------------------
+- Be able to override factory for types
+  [vangheem]
+ - Require pycryptodome instead of pycrypto
+  [vangheem]
+
+
 3.2.16-1
 -------------------
 
