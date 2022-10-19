@@ -23,6 +23,7 @@ consist of field definitions.
 - guillotina.schema.Time
 - guillotina.fields.PatchField: allow updating value without patching entire value
 - guillotina.fields.BucketListField: optimized storage for very large lists of data
+- guillotina.fields.BucketDictField: optimized storage for very large dictionaries of data
 - guillotina.files.CloudFileField: file field for storing in db or cloud storage
 
 
@@ -30,6 +31,9 @@ consist of field definitions.
 
 Guillotina provides a `PatchField` which allows you to patch values of
 `List`, `Dict` and `Int` fields without having the original value.
+This is done doing a PATCH request to the object absolute url with
+the following payloads:
+
 
 ### Patch field list
 
@@ -40,17 +44,30 @@ from guillotina.fields import PatchField
 from guillotina import schema
 
 class IMySchema(Interface):
-    values = PatchField(schema.List(
+    field = PatchField(schema.List(
         value_type=schema.Text()
     ))
 ```
 
 Then, payload for patching to append to this list would look like:
 
+
 ```json
 {
-    "values": {
+    "field": {
         "op": "append",
+        "value": "foobar"
+    }
+}
+```
+
+
+Append if unique value only:
+
+```json
+{
+    "field": {
+        "op": "appendunique",
         "value": "foobar"
     }
 }
@@ -60,8 +77,19 @@ Extend:
 
 ```json
 {
-    "values": {
+    "field": {
         "op": "extend",
+        "value": ["foo", "bar"]
+    }
+}
+```
+
+Extend if unique values:
+
+```json
+{
+    "field": {
+        "op": "extendunique",
         "value": ["foo", "bar"]
     }
 }
@@ -71,9 +99,20 @@ Delete:
 
 ```json
 {
-    "values": {
+    "field": {
         "op": "del",
         "value": 0
+    }
+}
+```
+
+Remove:
+
+```json
+{
+    "field": {
+        "op": "remove",
+        "value": "foobar"
     }
 }
 ```
@@ -82,12 +121,42 @@ Update:
 
 ```json
 {
-    "values": {
+    "field": {
         "op": "update",
         "value": {
             "index": 0,
             "value": "Something new"
         }
+    }
+}
+```
+
+Clear:
+
+```json
+{
+    "field": {
+        "op": "clear"
+    }
+}
+```
+
+Multiple operations:
+
+```json
+{
+    "field": {
+        "op": "multi",
+        "value": [
+            {
+                "op": "del",
+                "value": 0
+            },
+            {
+                "op": "append",
+                "value": "foobar"
+            }
+        ]
     }
 }
 ```
@@ -102,7 +171,7 @@ from guillotina.fields import PatchField
 from guillotina import schema
 
 class IMySchema(Interface):
-    values = PatchField(schema.Dict(
+    field = PatchField(schema.Dict(
         key_type=schema.Text(),
         value_type=schema.Text()
     ))
@@ -112,7 +181,7 @@ Then, payload for patching to add to this dict would look like:
 
 ```json
 {
-    "values": {
+    "field": {
         "op": "assign",
         "value": {
             "key": "foo",
@@ -126,9 +195,59 @@ Delete:
 
 ```json
 {
-    "values": {
+    "field": {
         "op": "del",
         "value": "foo"
+    }
+}
+```
+
+Update:
+
+```json
+{
+    "field": {
+        "op": "update",
+        "field": [{
+            "key": "foo",
+            "value": "bar"
+        }, {
+            "key": "foo2",
+            "value": "bar2"
+        }]
+    }
+}
+```
+
+Clear:
+
+```json
+{
+    "field": {
+        "op": "clear"
+    }
+}
+```
+
+Multiple operations:
+
+```json
+{
+    "field": {
+        "op": "multi",
+        "value": [
+            {
+                "op": "del",
+                "value": "foo"
+            },
+            {
+                "op": "assign",
+                "value": {
+                    "key": "foo3",
+                    "value": "bar3"
+                }
+            }
+        ]
     }
 }
 ```
@@ -213,7 +332,7 @@ from guillotina.fields import BucketListField
 from guillotina import schema
 
 class IMySchema(Interface):
-    values = BucketListField(
+    field = BucketListField(
         value_type=schema.Text(),
         bucket_len=5000
     )
@@ -224,7 +343,7 @@ Then, payload for patching to append to this list would look like:
 
 ```json
 {
-    "values": {
+    "field": {
         "op": "append",
         "value": "foobar"
     }
@@ -235,7 +354,7 @@ Extend:
 
 ```json
 {
-    "values": {
+    "field": {
         "op": "extend",
         "value": ["foo", "bar"]
     }
@@ -246,7 +365,7 @@ Delete:
 
 ```json
 {
-    "values": {
+    "field": {
         "op": "del",
         "value": {
             "bucket_index": 0,
@@ -254,4 +373,162 @@ Delete:
         }
     }
 }
+```
+
+Clear:
+
+```json
+{
+    "field": {
+        "op": "clear"
+    }
+}
+```
+
+Multi:
+
+Group multiple operations into one
+
+```json
+{
+    "field": {
+        "op": "multi",
+        "value": [{
+            "op": "assign",
+            "value": {
+                "key": "foo",
+                "value": "bar"
+            }
+        }]
+    }
+}
+```
+
+
+## Bucket dict field
+
+```python
+from zope.interface import Interface
+from guillotina.fields import BucketDictField
+from guillotina import schema
+
+class IMySchema(Interface):
+    field = BucketDictField(
+        key_type=schema.Text(),
+        value_type=schema.Text(),
+        bucket_len=5000
+    )
+```
+
+
+Then, payload for patching would be...:
+
+```json
+{
+    "field": {
+        "op": "assign",
+        "value": {
+            "key": "foo",
+            "value": "bar"
+        }
+    }
+}
+```
+
+Update:
+
+```json
+{
+    "field": {
+        "op": "update",
+        "value": [{
+            "key": "foo",
+            "value": "barupdated"
+        }, {
+            "key": "other",
+            "value": "othervalue"
+        }]
+    }
+}
+```
+
+Delete:
+
+```json
+{
+    "field": {
+        "op": "del",
+        "value": "foo"
+    }
+}
+```
+
+Clear:
+
+```json
+{
+    "field": {
+        "op": "clear"
+    }
+}
+```
+
+
+# Field validation
+
+## constraints
+
+To provide additional field validation, you can provide a constraint for a field.
+
+This is a simple callable that takes an argument with the value that is being
+validated for the field.
+
+The most simple type of constraint is to use a lambda function:
+
+```python
+from zope.interface import Interface
+from guillotina import schema
+
+class IMySchema(Interface):
+    field = schema.Text(constraint=lambda val: val != 'foobar')
+```
+
+
+## field validators
+
+To provide more complex field validation, you can use the `validator` field decorator:
+
+```python
+from zope.interface import Interface
+from guillotina import schema
+
+class IMySchema(Interface):
+    field = schema.Text()
+
+    @field.validator
+    def validate_field(field, value):
+        # field is bound field so we can look at context now
+        return field.context.foobar is None
+
+```
+
+
+## invariants
+
+You can also validate the modified objects with invariants.
+
+
+```python
+from zope.interface import Interface, invariant, Invalid
+from guillotina import schema
+
+class IMySchema(Interface):
+    field = schema.Text()
+
+    @invariant
+    def validate_obj(obj):
+        # field is bound field so we can look at context here
+        if obj.foo is None and obj.bar is None:
+            raise Invalid(obj)
+
 ```

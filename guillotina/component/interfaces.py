@@ -12,6 +12,8 @@
 #
 ############################################################################
 # flake8: noqa
+
+# fmt: off
 from guillotina.component._compat import _BLANK
 from zope.interface import Attribute
 from zope.interface import implements
@@ -38,11 +40,15 @@ from zope.interface.interfaces import RegistrationEvent
 from zope.interface.interfaces import Unregistered
 
 
+# fmt: on
+
+
 class IComponentArchitecture(Interface):
     """The Component Architecture is defined by two key components: Adapters
     and Utiltities. Both are managed by site managers. All other components
     build on top of them.
     """
+
     # Site Manager API
 
     def get_global_components():  # type: ignore
@@ -65,7 +71,7 @@ class IComponentArchitecture(Interface):
 
     # Utility API
 
-    def get_utility(interface, name='', context=None):
+    def get_utility(interface, name="", context=None):
         """Get the utility that provides interface
 
         Returns the nearest utility to the context that implements the
@@ -73,7 +79,7 @@ class IComponentArchitecture(Interface):
         ComponentLookupError.
         """
 
-    def query_utility(interface, name='', default=None, context=None):
+    def query_utility(interface, name="", default=None, context=None):
         """Look for the utility that provides interface
 
         Returns the nearest utility to the context that implements
@@ -97,9 +103,7 @@ class IComponentArchitecture(Interface):
 
     # Adapter API
 
-    def get_adapter(object,
-                    interface=Interface, name=_BLANK,
-                    context=None):
+    def get_adapter(object, interface=Interface, name=_BLANK, context=None):
         """Get a named adapter to an interface for an object
 
         Returns an adapter that can adapt object to interface.  If a matching
@@ -112,9 +116,7 @@ class IComponentArchitecture(Interface):
         and this adapter's 'Adapters' service is used.
         """
 
-    def get_multi_adapter(objects,
-                          interface=Interface, name='',
-                          context=None):
+    def get_multi_adapter(objects, interface=Interface, name="", context=None):
         """Look for a multi-adapter to an interface for an objects
 
         Returns a multi-adapter that can adapt objects to interface.  If a
@@ -131,8 +133,7 @@ class IComponentArchitecture(Interface):
         named adapter methods with an empty string for a name.
         """
 
-    def query_adapter(object, interface=Interface, name=_BLANK,
-                      default=None, context=None):
+    def query_adapter(object, interface=Interface, name=_BLANK, default=None, context=None):
         """Look for a named adapter to an interface for an object
 
         Returns an adapter that can adapt object to interface.  If a matching
@@ -145,10 +146,7 @@ class IComponentArchitecture(Interface):
         and this adapter's 'Adapters' service is used.
         """
 
-    def query_multi_adapter(objects,
-                            interface=Interface, name=_BLANK,
-                            default=None,
-                            context=None):
+    def query_multi_adapter(objects, interface=Interface, name=_BLANK, default=None, context=None):
         """Look for a multi-adapter to an interface for objects
 
         Returns a multi-adapter that can adapt objects to interface.  If a
@@ -203,7 +201,6 @@ class IComponentArchitecture(Interface):
 
         """
 
-
     def adapts(*interfaces):
         """Declare that a class adapts the given interfaces.
 
@@ -234,6 +231,7 @@ class IRegistry(Interface):
     def registrations():  # type: ignore
         """Return an iterable of component registrations
         """
+
 
 class IComponentRegistrationConvenience(Interface):
     """API for registering components.
@@ -316,7 +314,7 @@ class IComponentRegistrationConvenience(Interface):
         library modules, as component registration is a configuration
         activity.
         """
-    
+
 
 class ISite(Interface):
     """Marker interface to indicate that we have a site"""
@@ -341,7 +339,6 @@ class IFactory(Interface):
 
     def __call__(*args, **kw):
         """Return an instance of the objects we're a factory for."""
-
 
     def get_interfaces():  # type: ignore
         """Get the interfaces implemented by the factory

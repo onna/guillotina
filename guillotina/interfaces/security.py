@@ -1,34 +1,20 @@
-##############################################################################
-#
-# Copyright (c) 2001, 2002 Zope Foundation and Contributors.
-# All Rights Reserved.
-#
-# This software is subject to the provisions of the Zope Public License,
-# Version 2.1 (ZPL).  A copy of the ZPL should accompany this distribution.
-# THIS SOFTWARE IS PROVIDED "AS IS" AND ANY AND ALL EXPRESS OR IMPLIED
-# WARRANTIES ARE DISCLAIMED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-# WARRANTIES OF TITLE, MERCHANTABILITY, AGAINST INFRINGEMENT, AND FITNESS
-# FOR A PARTICULAR PURPOSE.
-#
-##############################################################################
-"""Security map to hold matrix-like relationships.
-
-In all cases, 'setting' values are one of the defined constants
-`Allow`, `Deny`, or `Unset`.
-"""
+from .misc import IRequest
+from guillotina.db.orm.interfaces import IBaseObject
 from guillotina.i18n import MessageFactory
+from guillotina.schema import List
 from guillotina.schema import Text
 from guillotina.schema import TextLine
 from zope.interface import Attribute
 from zope.interface import Interface
 
-import copyreg
+import copyreg  # type: ignore
+import typing
 
 
-_ = MessageFactory('guillotina')
+_ = MessageFactory("guillotina")
 
 
-Public = 'guillotina.Public'  # constant to check for always allowed permission
+Public = "guillotina.Public"  # constant to check for always allowed permission
 
 # These are the "setting" values returned by several methods defined
 # in these interfaces.  The implementation may move to another
@@ -47,7 +33,7 @@ class PermissionSetting:
         name. If the name already exists in the dict, return that
         instance rather than creating a new one.
         """
-        instances = cls.__dict__.get('_z_instances')
+        instances = cls.__dict__.get("_z_instances")
         if instances is None:
             cls._z_instances = instances = {}
         it = instances.get(name)
@@ -67,7 +53,7 @@ class PermissionSetting:
         return self.__name
 
     def __str__(self):
-        return 'PermissionSetting: %s' % self.__name
+        return "PermissionSetting: %s" % self.__name
 
     __repr__ = __str__
 
@@ -75,52 +61,38 @@ class PermissionSetting:
 # register PermissionSettings to be symbolic constants by identity,
 # even when pickled and unpickled.
 copyreg.constructor(PermissionSetting)
-copyreg.pickle(PermissionSetting,
-               PermissionSetting.get_name,
-               PermissionSetting)
+copyreg.pickle(PermissionSetting, PermissionSetting.get_name, PermissionSetting)
 
 
-Allow = PermissionSetting(
-    'Allow', 'Explicit allow setting for permissions')
+Allow = PermissionSetting("Allow", "Explicit allow setting for permissions")
 
-Deny = PermissionSetting(
-    'Deny', 'Explicit deny setting for permissions')
+Deny = PermissionSetting("Deny", "Explicit deny setting for permissions")
 
-AllowSingle = PermissionSetting(
-    'AllowSingle', 'Explicit allow and not inherit permission')
+AllowSingle = PermissionSetting("AllowSingle", "Explicit allow and not inherit permission")
 
-Unset = PermissionSetting(
-    'Unset', 'Unset constant that denotes no setting for permission')
-
-
-class IGroups(Interface):  # pylint: disable=E0239
-    """A group Utility search."""
+Unset = PermissionSetting("Unset", "Unset constant that denotes no setting for permission")
 
 
 class IRole(Interface):  # pylint: disable=E0239
     """A role object."""
 
     id = TextLine(
-        title='Id',
-        description='Id as which this role will be known and used.',
-        readonly=True,
-        required=True)
+        title="Id", description="Id as which this role will be known and used.", readonly=True, required=True
+    )
 
-    title = TextLine(
-        title='Title',
-        description='Provides a title for the role.',
-        required=True)
+    title = TextLine(title="Title", description="Provides a title for the role.", required=True)
 
     description = Text(
-        title='Description',
-        description='Provides a description for the role.',
-        required=False)
+        title="Description", description="Provides a description for the role.", required=False
+    )
 
 
 class IPrincipalRoleMap(Interface):  # pylint: disable=E0239
     """Mappings between principals and roles."""
 
-    def get_principals_for_role(self, role_id):  # noqa: N805
+    _bycol = Attribute("settings stored by col")
+
+    def get_principals_for_role(role_id):  # noqa: N805
         """Get the principals that have been granted a role.
 
         Return the list of (principal id, setting) who have been assigned or
@@ -130,7 +102,7 @@ class IPrincipalRoleMap(Interface):  # pylint: disable=E0239
         then the empty list is returned.
         """
 
-    def get_roles_for_principal(self, principal_id):  # noqa: N805
+    def get_roles_for_principal(principal_id):  # noqa: N805
         """Get the roles granted to a principal.
 
         Return the list of (role id, setting) assigned or removed from
@@ -140,11 +112,11 @@ class IPrincipalRoleMap(Interface):  # pylint: disable=E0239
         this principal, then the empty list is returned.
         """
 
-    def get_setting(self, role_id, principal_id, default=Unset):  # noqa: N805
+    def get_setting(role_id, principal_id, default=Unset):  # noqa: N805
         """Return the setting for this principal, role combination
         """
 
-    def get_principals_and_roles(self):
+    def get_principals_and_roles():
         """Get all settings.
 
         Return all the principal/role combinations along with the
@@ -156,23 +128,23 @@ class IPrincipalRoleMap(Interface):  # pylint: disable=E0239
 class IPrincipalRoleManager(IPrincipalRoleMap):
     """Management interface for mappings between principals and roles."""
 
-    def assign_role_to_principal(self, role_id, principal_id):  # noqa: N805
+    def assign_role_to_principal(role_id, principal_id):  # noqa: N805
         """Assign the role to the principal."""
 
-    def assign_role_to_principal_no_inherit(self, role_id, principal_id):  # noqa: N805
+    def assign_role_to_principal_no_inherit(role_id, principal_id):  # noqa: N805
         """Assign the role to the principal."""
 
-    def remove_role_from_principal(self, role_id, principal_id):  # noqa: N805
+    def remove_role_from_principal(role_id, principal_id):  # noqa: N805
         """Remove a role from the principal."""
 
-    def unset_role_for_principal(self, role_id, principal_id):  # noqa: N805
+    def unset_role_for_principal(role_id, principal_id):  # noqa: N805
         """Unset the role for the principal."""
 
 
 class IRolePermissionMap(Interface):  # pylint: disable=E0239
     """Mappings between roles and permissions."""
 
-    def get_permissions_for_role(self, role_id):  # noqa: N805
+    def get_permissions_for_role(role_id):  # noqa: N805
         """Get the premissions granted to a role.
 
         Return a sequence of (permission id, setting) tuples for the given
@@ -182,7 +154,7 @@ class IRolePermissionMap(Interface):  # pylint: disable=E0239
         role, then the empty list is returned.
         """
 
-    def get_roles_for_permission(self, permission_id):  # noqa: N805
+    def get_roles_for_permission(permission_id):  # noqa: N805
         """Get the roles that have a permission.
 
         Return a sequence of (role id, setting) tuples for the given
@@ -192,13 +164,13 @@ class IRolePermissionMap(Interface):  # pylint: disable=E0239
         returned.
         """
 
-    def get_setting(self, permission_id, role_id, default=Unset):  # noqa: N805
+    def get_setting(permission_id, role_id, default=Unset):  # noqa: N805
         """Return the setting for the given permission id and role id
 
         If there is no setting, Unset is returned
         """
 
-    def get_roles_and_permissions(self):
+    def get_roles_and_permissions():
         """Return a sequence of (permission_id, role_id, setting) here.
 
         The settings are returned as a sequence of permission, role,
@@ -212,18 +184,18 @@ class IRolePermissionMap(Interface):  # pylint: disable=E0239
 class IRolePermissionManager(IRolePermissionMap):
     """Management interface for mappings between roles and permissions."""
 
-    def grant_permission_to_role(self, permission_id, role_id):  # noqa: N805
+    def grant_permission_to_role(permission_id, role_id):  # noqa: N805
         """Bind the permission to the role.
         """
 
-    def grant_permission_to_role_no_inherit(self, role_id, principal_id):  # noqa: N805
+    def grant_permission_to_role_no_inherit(permission_id, role_id):  # noqa: N805
         """Assign the role to the principal without local inherit."""
 
-    def deny_permission_to_role(self, permission_id, role_id):  # noqa: N805
+    def deny_permission_to_role(permission_id, role_id):  # noqa: N805
         """Deny the permission to the role
         """
 
-    def unset_permission_from_role(self, permission_id, role_id):  # noqa: N805
+    def unset_permission_from_role(permission_id, role_id):  # noqa: N805
         """Clear the setting of the permission to the role.
         """
 
@@ -231,7 +203,7 @@ class IRolePermissionManager(IRolePermissionMap):
 class IPrincipalPermissionMap(Interface):  # pylint: disable=E0239
     """Mappings between principals and permissions."""
 
-    def get_principals_for_permission(self, permission_id):  # noqa: N805
+    def get_principals_for_permission(permission_id):  # noqa: N805
         """Get the principas that have a permission.
 
         Return the list of (principal_id, setting) tuples that describe
@@ -241,7 +213,7 @@ class IPrincipalPermissionMap(Interface):  # pylint: disable=E0239
         list is returned.
         """
 
-    def get_permissions_for_principal(self, principal_id):  # noqa: N805
+    def get_permissions_for_principal(principal_id):  # noqa: N805
         """Get the permissions granted to a principal.
 
         Return the list of (permission, setting) tuples that describe
@@ -251,14 +223,14 @@ class IPrincipalPermissionMap(Interface):  # pylint: disable=E0239
         list is returned.
         """
 
-    def get_setting(self, permission_id, principal_id, default=Unset):  # noqa: N805
+    def get_setting(permission_id, principal_id, default=Unset):  # noqa: N805
         """Get the setting for a permission and principal.
 
         Get the setting (Allow/Deny/Unset) for a given permission and
         principal.
         """
 
-    def get_principals_and_permissions(self):
+    def get_principals_and_permissions():
         """Get all principal permission settings.
 
         Get the principal security assertions here in the form
@@ -270,18 +242,18 @@ class IPrincipalPermissionMap(Interface):  # pylint: disable=E0239
 class IPrincipalPermissionManager(IPrincipalPermissionMap):
     """Management interface for mappings between principals and permissions."""
 
-    def grant_permission_to_principal(self, permission_id, principal_id):  # noqa: N805
+    def grant_permission_to_principal(permission_id, principal_id):  # noqa: N805
         """Assert that the permission is allowed for the principal.
         """
 
-    def grant_permission_to_principal_no_inherit(self, role_id, principal_id):  # noqa: N805
+    def grant_permission_to_principal_no_inherit(role_id, principal_id):  # noqa: N805
         """Assign the role to the principal without local inherit."""
 
-    def deny_permission_to_principal(self, permission_id, principal_id):  # noqa: N805
+    def deny_permission_to_principal(permission_id, principal_id):  # noqa: N805
         """Assert that the permission is denied to the principal.
         """
 
-    def unset_permission_for_principal(self, permission_id, principal_id):  # noqa: N805
+    def unset_permission_for_principal(permission_id, principal_id):  # noqa: N805
         """Remove the permission (either denied or allowed) from the
         principal.
         """
@@ -290,11 +262,11 @@ class IPrincipalPermissionManager(IPrincipalPermissionMap):
 class IInheritPermissionMap(Interface):  # pylint: disable=E0239
     """Mappings between permissions and inheritance."""
 
-    def get_locked_permissions(self):  # noqa: N805
+    def get_locked_permissions():  # noqa: N805
         """Returns the list of permissions that are blocked to be inherited
         """
 
-    def get_inheritance(self, permission_id):  # noqa: N805
+    def get_inheritance(permission_id):  # noqa: N805
         """Returns a boolen if inheritance is blocked
         """
 
@@ -302,11 +274,11 @@ class IInheritPermissionMap(Interface):  # pylint: disable=E0239
 class IInheritPermissionManager(IInheritPermissionMap):
     """Management interface for mappings between inheritance and permissions."""
 
-    def deny_inheritance(self, permission_id):
+    def deny_inheritance(permission_id):
         """Set inheritance for the permission.
         """
 
-    def allow_inheritance(self, permission_id):
+    def allow_inheritance(permission_id):
         """Unset inheritance for the permission.
         """
 
@@ -315,20 +287,20 @@ class IGrantInfo(Interface):  # pylint: disable=E0239
     """Get grant info needed for checking access
     """
 
-    def principal_permission_grant(self, principal, permission):  # noqa: N805
+    def principal_permission_grant(principal, permission):  # noqa: N805
         """Return the principal-permission grant if any
 
         The return value is one of Allow, Deny, or Unset
         """
 
-    def get_roles_for_permission(self, permission):  # noqa: N805
+    def get_roles_for_permission(permission):  # noqa: N805
         """Return the role grants for the permission
 
         The role grants are an iterable of role, setting tuples, where
         setting is either Allow or Deny.
         """
 
-    def get_roles_for_principal(self, principal):  # noqa: N805
+    def get_roles_for_principal(principal):  # noqa: N805
         """Return the role grants for the principal
 
         The role grants are an iterable of role, setting tuples, where
@@ -336,45 +308,21 @@ class IGrantInfo(Interface):  # pylint: disable=E0239
         """
 
 
-class IInteraction(Interface):  # pylint: disable=E0239
-    """A representation of an interaction between some actors and the system.
-    """
-
-    participations = Attribute("""An iterable of participations.""")
-
-    def add(self, participation):  # noqa: N805
-        """Add a participation."""
-
-    def remove(self, participation):  # noqa: N805
-        """Remove a participation."""
-
-    def check_permission(self, permission, object):  # noqa: N805
-        """Return whether security context allows permission on object.
-
-        Arguments:
-        permission -- A permission name
-        object -- The object being accessed according to the permission
-        """
-
-
 class IPermission(Interface):  # pylint: disable=E0239
     """A permission object."""
 
     id = TextLine(
-        title=_('Id'),
-        description=_('Id as which this permission will be known and used.'),
+        title=_("Id"),
+        description=_("Id as which this permission will be known and used."),
         readonly=True,
-        required=True)
+        required=True,
+    )
 
-    title = TextLine(
-        title=_('Title'),
-        description=_('Provides a title for the permission.'),
-        required=True)
+    title = TextLine(title=_("Title"), description=_("Provides a title for the permission."), required=True)
 
     description = Text(
-        title=_('Description'),
-        description=_('Provides a description for the permission.'),
-        required=False)
+        title=_("Description"), description=_("Provides a description for the permission."), required=False
+    )
 
 
 class IPrincipal(Interface):  # pylint: disable=E0239
@@ -392,23 +340,79 @@ class IPrincipal(Interface):  # pylint: disable=E0239
     purpose.
     """
 
+    groups = List(value_type=TextLine())
+
     id = TextLine(
-        title=_('Id'),
-        description=_('The unique identification of the principal.'),
+        title=_("Id"),
+        description=_("The unique identification of the principal."),
         required=True,
-        readonly=True)
+        readonly=True,
+    )
 
 
-class IParticipation(Interface):  # pylint: disable=E0239
-
-    interaction = Attribute('The interaction')
-    principal = Attribute('The authenticated principal')
+SettingType = typing.Union[bool, None, str]
 
 
 class ISecurityPolicy(Interface):  # pylint: disable=E0239
+    def __init__(IPrincipal):
+        """
+        """
 
-    def __call__(self, participation=None):  # noqa: N805
-        """Creates a new interaction for a given request.
+    def invalidate_cache():
+        """
+        Invalidate current cache
+        """
 
-        If participation is not None, it is added to the new interaction.
+    def check_permission(permission: str, obj: IBaseObject) -> bool:
+        """
+        Check if user has permission on object
+        """
+
+    def cached_decision(parent: IBaseObject, principal: str, groups: typing.List[str], permission: str):
+        """
+        """
+
+    def cached_principal_permission(
+        parent: IBaseObject, principal: str, groups: typing.List[str], permission: str, level: str
+    ) -> SettingType:
+        """
+        """
+
+    def global_principal_roles(principal: str, groups: typing.List[str]) -> typing.Dict[str, bool]:
+        """
+        """
+
+    def cached_principal_roles(
+        parent: IBaseObject, principal: str, groups: typing.List[str], level: str
+    ) -> typing.Dict[str, SettingType]:
+        """
+        """
+
+
+class IPasswordHasher(Interface):
+    def __call__(pw, salt):
+        """
+        Return hash of password
+        """
+
+
+class IPasswordChecker(Interface):
+    def __call__(hashed_value, password):
+        """
+        Return True if password matches hashed_value
+        """
+
+
+class IAuthExtractor(Interface):
+    def __call__(request: IRequest) -> typing.Optional[typing.Dict]:
+        """
+        """
+
+
+class IGroups(Interface):
+    """A group Utility search."""
+
+    def get_principal(ident: str, principal: typing.Optional[IPrincipal]) -> IPrincipal:
+        """
+        Get group principal object
         """

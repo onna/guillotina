@@ -24,10 +24,12 @@
      :param layer: Layer this service is registered for. Default is `IDefaultLayer`
      :type layer: str
      :param name: This is used as part of the uri. Example `@foobar` -> `/mycontent/@foobar`.
-     :param summary: Used for documentation and swagger.
-     :param description: Used for documentation and swagger.
-     :param responses: Used for documentation and swagger.
-     :param parameters: Used for documentation and swagger.
+     :param summary: Used for documentation and OpenAPI.
+     :param description: Used for documentation and OpenAPI.
+     :param responses: Used for documentation and OpenAPI.
+     :param parameters: Used for documentation and OpenAPI.
+     :param requestBody: Used for documentation and OpenAPI
+     :param validate: Automatically validate request body with OpenAPI definition
 
   .. function:: contenttype(**kwargs)
 
@@ -48,6 +50,8 @@
      :type allowed_types: list
      :param behaviors: List of behaviors to enable for this type.
      :type behaviors: list
+     :param factory: Dotted name to custom factory to use. See guillotina.content.ResourceFactory for default implementation
+     :type behaviors: str
 
 
   .. function:: behavior(**kwargs)
@@ -98,11 +102,13 @@
      >>> from guillotina import configure
      >>> @configure.addon(
            name="docaddon",
-           title="Doc addon")
+           title="Doc addon",
+           dependencies=["cms"])
          class TestAddon(Addon): pass
 
      :param name: Unique name of addon
      :param title: Title of addon
+     :param dependencies: List of names of dependency addons
 
 
   .. function:: adapter(**kwargs)

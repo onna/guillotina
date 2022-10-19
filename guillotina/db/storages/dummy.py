@@ -1,4 +1,3 @@
-from guillotina.db import ROOT_ID
 from guillotina.db.interfaces import IStorage
 from guillotina.db.storages.base import BaseStorage
 from guillotina.exceptions import ConflictIdOnContainer
@@ -10,17 +9,16 @@ import os
 import pickle
 
 
-logger = logging.getLogger('guillotina')
+logger = logging.getLogger("guillotina")
 
 
 @implementer(IStorage)
-class DummyStorage(BaseStorage):
+class DummyStorage(BaseStorage):  # type: ignore
     """
     Dummy in-memory storage for testing
     """
 
     _last_transaction = 1
-    _transaction_strategy = 'resolve'
     _supports_unique_constraints = True
 
     _db = None
@@ -47,9 +45,6 @@ class DummyStorage(BaseStorage):
     async def close(self, con):
         pass
 
-    async def root(self):
-        return await self.load(None, ROOT_ID)
-
     async def last_transaction(self, txn):
         return self._last_transaction
 
@@ -68,11 +63,8 @@ class DummyStorage(BaseStorage):
         pass
 
     def get_txn(self, txn):
-        if not getattr(txn, '_db_txn', None):
-            txn._db_txn = {
-                'added': {},
-                'removed': []
-            }
+        if not getattr(txn, "_db_txn", None):
+            txn._db_txn = {"added": {}, "removed": []}
         return txn._db_txn
 
     async def store(self, oid, old_serial, writer, obj, txn):
@@ -86,63 +78,64 @@ class DummyStorage(BaseStorage):
         if obj.__new_marker__ and writer.parent_id in self._db:
             # look in all the children for object of same id
             parent = self._db[writer.parent_id]
-            if writer.id in parent['children']:
-                raise ConflictIdOnContainer(Exception('Duplicate id'))
+            if writer.id in parent["children"]:
+                raise ConflictIdOnContainer(Exception("Duplicate id"))
 
         tobj = {
-            'zoid': oid,
-            'tid': txn._tid,
-            'size': len(p),
-            'part': part,
-            'resource': writer.resource,
-            'of': writer.of,
-            'serial': old_serial,
-            'parent_id': writer.parent_id,
-            'id': writer.id,
-            'type': writer.type,
-            'json': json,
-            'state': p,
-            'children': existing.get('children', {}),
-            'ofs': existing.get('ofs', {})
+            "zoid": oid,
+            "tid": txn._tid,
+            "size": len(p),
+            "part": part,
+            "resource": writer.resource,
+            "of": writer.of,
+            "serial": old_serial,
+            "parent_id": writer.parent_id,
+            "id": writer.id,
+            "type": writer.type,
+            "json": json,
+            "state": p,
+            "children": existing.get("children", {}),
+            "ofs": existing.get("ofs", {}),
         }
-        self.get_txn(txn)['added'][oid] = tobj
+        self.get_txn(txn)["added"][oid] = tobj
+        await txn._cache.store_object(obj, p)
         return txn._tid, len(p)
 
     async def delete(self, txn, oid):
-        self.get_txn(txn)['removed'].append(oid)
+        self.get_txn(txn)["removed"].append(oid)
 
     async def commit(self, transaction):
-        for oid, element in self.get_txn(transaction)['added'].items():
-            if oid in self._db and self._db[oid]['parent_id'] != element['parent_id']:
+        for oid, element in self.get_txn(transaction)["added"].items():
+            if oid in self._db and self._db[oid]["parent_id"] != element["parent_id"]:
                 # can move object move, we need to cleanup here...
-                old_parent_ob = self._db[self._db[oid]['parent_id']]
-                children = {v: k for k, v in old_parent_ob['children'].items()}
+                old_parent_ob = self._db[self._db[oid]["parent_id"]]
+                children = {v: k for k, v in old_parent_ob["children"].items()}
                 if oid in children:
-                    del old_parent_ob['children'][children[oid]]
+                    del old_parent_ob["children"][children[oid]]
 
             self._db[oid] = element
-            if element['parent_id'] in self._db:
-                children = {v: k for k, v in self._db[element['parent_id']]['children'].items()}
+            if element["parent_id"] in self._db:
+                children = {v: k for k, v in self._db[element["parent_id"]]["children"].items()}
                 if oid in children:
                     # clear in case of object rename
-                    del self._db[element['parent_id']]['children'][children[oid]]
-                self._db[element['parent_id']]['children'][element['id']] = oid
-            if element['of'] and element['of'] in self._db:
-                self._db[element['of']]['ofs'][element['id']] = oid
+                    del self._db[element["parent_id"]]["children"][children[oid]]
+                self._db[element["parent_id"]]["children"][element["id"]] = oid
+            if element["of"] and element["of"] in self._db:
+                self._db[element["of"]]["ofs"][element["id"]] = oid
 
-        for oid in self.get_txn(transaction)['removed']:
+        for oid in self.get_txn(transaction)["removed"]:
             tobj = self._db[oid]
             del self._db[oid]
-            if tobj['parent_id'] and tobj['parent_id'] in self._db:
-                parent_ob = self._db[tobj['parent_id']]
-                children = {v: k for k, v in parent_ob['children'].items()}
+            if tobj["parent_id"] and tobj["parent_id"] in self._db:
+                parent_ob = self._db[tobj["parent_id"]]
+                children = {v: k for k, v in parent_ob["children"].items()}
                 if oid in children:
-                    del parent_ob['children'][children[oid]]
-            if tobj['of'] and tobj['of'] in self._db:
-                of_ob = self._db[tobj['of']]
-                ofs = {v: k for k, v in of_ob['ofs'].items()}
+                    del parent_ob["children"][children[oid]]
+            if tobj["of"] and tobj["of"] in self._db:
+                of_ob = self._db[tobj["of"]]
+                ofs = {v: k for k, v in of_ob["ofs"].items()}
                 if oid in ofs:
-                    del of_ob['ofs'][ofs[oid]]
+                    del of_ob["ofs"][ofs[oid]]
 
         return transaction._tid
 
@@ -155,33 +148,33 @@ class DummyStorage(BaseStorage):
         keys = []
         if oid not in self._db:
             return []
-        for cid, coid in self._db[oid]['children'].items():
+        for cid, coid in self._db[oid]["children"].items():
             obj = await self.load(txn, coid)
             keys.append(obj)
         return keys
 
     async def get_child(self, txn, parent_id, id):
         parent_ob = self._db[parent_id]
-        return await self.load(txn, parent_ob['children'][id])
+        return await self.load(txn, parent_ob["children"][id])
 
     async def has_key(self, txn, parent_id, id):
         if parent_id in self._db:
             parent_ob = self._db[parent_id]
-            return id in parent_ob['children']
+            return id in parent_ob["children"]
 
     async def len(self, txn, oid):
         if oid in self._db:
-            return len(self._db[oid]['children'])
+            return len(self._db[oid]["children"])
         return 0
 
     async def items(self, txn, oid):  # pragma: no cover
-        for cid, coid in self._db[oid]['children'].items():
+        for cid, coid in self._db[oid]["children"].items():
             obj = await self.load(txn, coid)
             yield obj
 
     async def get_children(self, txn, parent, keys):
         children = []
-        for cid, coid in self._db[parent]['children'].items():
+        for cid, coid in self._db[parent]["children"].items():
             if cid not in keys:
                 continue
             record = await self.load(txn, coid)
@@ -189,11 +182,11 @@ class DummyStorage(BaseStorage):
         return children
 
     async def get_annotation(self, txn, oid, id):
-        return await self.load(txn, self._db[oid]['ofs'][id])
+        return await self.load(txn, self._db[oid]["ofs"][id])
 
     async def get_annotation_keys(self, txn, oid):
         keys = []
-        for of_id in self._db[oid]['ofs'].values():
+        for of_id in self._db[oid]["ofs"].values():
             obj = await self.load(txn, of_id)
             keys.append(obj)
         return keys
@@ -204,58 +197,57 @@ class DummyStorage(BaseStorage):
 
     async def write_blob_chunk(self, txn, bid, oid, chunk_index, data):
         if bid not in self._blobs:
-            self._blobs[bid] = {
-                'oid': oid,
-                'chunks': []
-            }
-        self._blobs[bid]['chunks'].append(data)
+            self._blobs[bid] = {"oid": oid, "chunks": []}
+        self._blobs[bid]["chunks"].append(data)
 
     async def read_blob_chunk(self, txn, bid, chunk=0):
-        return {
-            'data': self._blobs[bid]['chunks'][chunk]
-        }
+        return {"data": self._blobs[bid]["chunks"][chunk]}
 
     async def get_conflicts(self, txn):
         return []
 
     async def get_page_of_keys(self, txn, oid, page=1, page_size=1000):
-        children = self._db[oid]['children']
+        children = self._db[oid]["children"]
         keys = [k for k in sorted(children.values())]
         start = (page - 1) * page_size
         end = start + page_size
-        return [self._db[key]['id'] for key in keys[start:end]]
+        return [self._db[key]["id"] for key in keys[start:end]]
+
+    async def vacuum(self):
+        """
+        nothing to vacuum in this implementation
+        """
 
 
 @implementer(IStorage)
-class DummyFileStorage(DummyStorage):  # pragma: no cover
-
-    def __init__(self, filename='g.db'):
+class DummyFileStorage(DummyStorage):  # type: ignore
+    def __init__(self, filename="g.db"):  # pragma: no cover
         super(DummyFileStorage, self).__init__()
         self.filename = filename
-        self.blob_filename = self.filename + '.blobs'
+        self.blob_filename = self.filename + ".blobs"
         self.__load()
 
-    def __load(self):
+    def __load(self):  # pragma: no cover
         if not os.path.exists(self.filename):
             return
-        with open(self.filename, 'rb') as fi:
+        with open(self.filename, "rb") as fi:
             try:
                 self._db = pickle.loads(fi.read())
             except EOFError:
-                logger.warning(f'Could not load db file {self.filename}')
+                logger.warning(f"Could not load db file {self.filename}")
         if os.path.exists(self.blob_filename):
-            with open(self.blob_filename, 'rb') as fi:
+            with open(self.blob_filename, "rb") as fi:
                 try:
                     self._blobs = pickle.loads(fi.read())
                 except EOFError:
-                    logger.warning(f'Could not load db file {self.blob_filename}')
+                    logger.warning(f"Could not load db file {self.blob_filename}")
 
-    def __save(self):
-        with open(self.filename, 'wb') as fi:
+    def __save(self):  # pragma: no cover
+        with open(self.filename, "wb") as fi:
             fi.write(pickle.dumps(self._db))
-        with open(self.blob_filename, 'wb') as fi:
+        with open(self.blob_filename, "wb") as fi:
             fi.write(pickle.dumps(self._blobs))
 
-    async def commit(self, transaction):
+    async def commit(self, transaction):  # pragma: no cover
         await super().commit(transaction)
         self.__save()

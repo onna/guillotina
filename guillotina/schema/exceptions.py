@@ -14,19 +14,29 @@ class StopValidation(Exception):
 class ValidationError(zope.interface.Invalid):
     """Raised if the Validation process fails."""
 
+    def __init__(self, value=None, type=None, field_name="", errors=None, constraint=None):
+        """
+        Follow guillotina 6 api but not fully support.
+        """
+        super().__init__(value, type, field_name)
+        self.value = value
+        self.type = type
+        self.field_name = field_name
+        self.errors = errors
+        self.constraint = constraint
+
     def doc(self):
         return self.__class__.__doc__
 
     def __eq__(self, other):
-        if not hasattr(other, 'args'):
+        if not hasattr(other, "args"):
             return False
         return self.args == other.args
 
     __hash__ = zope.interface.Invalid.__hash__  # python3
 
     def __repr__(self):  # pragma: no cover
-        return '%s(%s)' % (self.__class__.__name__,
-                           ', '.join(repr(arg) for arg in self.args))
+        return "%s(%s)" % (self.__class__.__name__, ", ".join(repr(arg) for arg in self.args))
 
 
 class RequiredMissing(ValidationError):

@@ -200,9 +200,9 @@ Each change can use the following settings:
 - Unset : you remove the setting
 
 
-## Exploring the API with Swagger
+## Exploring the API with OpenAPI
 
-In the previous step, we installed `guillotina_swagger`. With Swagger, we can
+In the previous step, we installed `guillotina.contrib.swagger`. With OpenAPI, we can
 inspect any context and explore the API.
 
 Visit `http://localhost:8080/@docs`
@@ -214,7 +214,7 @@ click the `Authorize` button
 ![alt text](../../_static/img/auth-swagger.png "Swagger Auth")
 
 
-The `Base API Endpoint` setting is what the current context is that you're exploring
+The top URL setting is what the current context is that you're exploring the API
 on. If you create content at `/db/container/foobar` and want to explore that
 content's API, you should change the URL. Different content types will have
 different services available.

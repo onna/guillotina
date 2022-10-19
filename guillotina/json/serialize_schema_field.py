@@ -1,6 +1,6 @@
 from guillotina import configure
-from guillotina.fields.interfaces import IPatchField
 from guillotina.component import get_multi_adapter
+from guillotina.fields.interfaces import IPatchField
 from guillotina.interfaces import ICloudFileField
 from guillotina.interfaces import IFileField
 from guillotina.interfaces import ISchemaFieldSerializeToJson
@@ -17,12 +17,17 @@ from guillotina.schema.interfaces import IDecimal
 from guillotina.schema.interfaces import IDict
 from guillotina.schema.interfaces import IField
 from guillotina.schema.interfaces import IFloat
+from guillotina.schema.interfaces import IFrozenSet
 from guillotina.schema.interfaces import IInt
 from guillotina.schema.interfaces import IJSONField
+from guillotina.schema.interfaces import IList
 from guillotina.schema.interfaces import IObject
+from guillotina.schema.interfaces import ISet
 from guillotina.schema.interfaces import IText
 from guillotina.schema.interfaces import ITextLine
 from guillotina.schema.interfaces import ITime
+from guillotina.schema.interfaces import ITuple
+from typing import Dict
 from zope.interface import implementedBy
 from zope.interface import Interface
 
@@ -30,26 +35,14 @@ from zope.interface import Interface
 FIELDS_CACHE: dict = {}
 
 
-@configure.adapter(
-    for_=(IField, Interface, Interface),
-    provides=ISchemaFieldSerializeToJson)
-class DefaultSchemaFieldSerializer(object):
+@configure.adapter(for_=(IField, Interface, Interface), provides=ISchemaFieldSerializeToJson)
+class DefaultSchemaFieldSerializer:
 
     # Elements we won't write
-    filtered_attributes = ['order', 'unique', 'defaultFactory', 'required']
-
-    # Elements that are of the same type as the field itself
-    field_type_attributes = ('min', 'max', 'default', 'title')
-
-    # Elements that are of the same type as the field itself, but are
-    # otherwise not validated
-    non_validated_field_type_attributes = ('missing_value', )
-
-    # Attributes that contain another field. Unfortunately,
-    field_instance_attributes = ('key_type', 'value_type', )
-
-    # Fields that are always written
-    forced_fields = frozenset(['default', 'missing_value', 'title'])
+    filtered_attributes = ["order", "unique", "defaultFactory", "required", "missing_value"]
+    forced_fields = frozenset(["default", "title"])
+    __name_translations: Dict[str, str] = {"readonly": "readOnly", "vocabulary": "enum"}
+    name_translations: Dict[str, str] = {}
 
     def __init__(self, field, schema, request):
         self.field = field
@@ -65,7 +58,7 @@ class DefaultSchemaFieldSerializer(object):
 
     def serialize(self):
         field = self.get_field()
-        result = {'type': self.field_type}
+        result = {"type": self.field_type}
         # caching the field_attributes here improves performance dramatically
         if field.__class__ in FIELDS_CACHE:
             field_attributes = FIELDS_CACHE[field.__class__].copy()
@@ -79,87 +72,102 @@ class DefaultSchemaFieldSerializer(object):
             if attribute_name in self.filtered_attributes:
                 continue
 
-            element_name = attribute_field.__name__
-            attribute_field = attribute_field.bind(field)
-            force = (element_name in self.forced_fields)
-
             value = attribute_field.get(field)
+            force = attribute_field.__name__ in self.forced_fields
+            if attribute_name in self.name_translations:
+                attribute_name = self.name_translations[attribute_name]
+            if attribute_name in self.__name_translations:
+                attribute_name = self.__name_translations[attribute_name]
 
-            # For 'default', 'missing_value' etc, we want to validate against
-            # the imported field type itself, not the field type of the
-            # attribute
-            if element_name in self.field_type_attributes or \
-                    element_name in self.non_validated_field_type_attributes:
-                attribute_field = field
-
-            text = None
+            info = None
             if isinstance(value, bytes):
-                text = value.decode('utf-8')
+                info = value.decode("utf-8")
             elif isinstance(value, str):
-                text = value
+                info = value
             elif IField.providedBy(value):
-                serializer = get_multi_adapter(
-                    (value, field, self.request),
-                    ISchemaFieldSerializeToJson)
-                text = serializer.serialize()
-                if 'properties' in text:
-                    text = text['properties']
+                serializer = get_multi_adapter((value, field, self.request), ISchemaFieldSerializeToJson)
+                info = serializer.serialize()
             elif value is not None and (force or value != field.missing_value):
-                text = json_compatible(value)
-
-            if text:
-                if attribute_name == 'value_type':
-                    attribute_name = 'items'
-                result[attribute_name] = text
-        if result['type'] == 'object':
+                info = json_compatible(value)
+            if info:
+                if attribute_name == "value_type":
+                    attribute_name = "items"
+                result[attribute_name] = info
+        if result["type"] == "object":
             if IJSONField.providedBy(field):
-                result['properties'] = field.json_schema
+                result.update(field.json_schema)
             if IDict.providedBy(field):
+                if "properties" not in result:
+                    result["properties"] = {}
                 if field.value_type:
                     field_serializer = get_multi_adapter(
-                        (field.value_type, self.schema, self.request),
-                        ISchemaFieldSerializeToJson)
-                    result['additionalProperties'] = field_serializer.serialize()
+                        (field.value_type, self.schema, self.request), ISchemaFieldSerializeToJson
+                    )
+                    result["additionalProperties"] = field_serializer.serialize()
                 else:
-                    result['additionalProperties'] = True
+                    result["additionalProperties"] = True
             elif IObject.providedBy(field):
-                schema_serializer = get_multi_adapter((field.schema, self.request),
-                                                      ISchemaSerializeToJson)
-                result['properties'] = schema_serializer.serialize()
+                schema_serializer = get_multi_adapter((field.schema, self.request), ISchemaSerializeToJson)
+                result["properties"] = schema_serializer.serialize()["properties"]
         if field.extra_values is not None:
             result.update(field.extra_values)
+        if self.format:
+            result["format"] = self.format
         return result
 
     @property
     def field_type(self):
-        # Needs to be implemented on specific type
+        # Needs to be implemented on specific type if different
+        return "string"
+
+    @property
+    def format(self):
         return None
 
 
-@configure.adapter(
-    for_=(IText, Interface, Interface),
-    provides=ISchemaFieldSerializeToJson)
+@configure.adapter(for_=(IText, Interface, Interface), provides=ISchemaFieldSerializeToJson)
 class DefaultTextSchemaFieldSerializer(DefaultSchemaFieldSerializer):
+    name_translations = {"max_length": "maxLength", "min_length": "minLength"}
 
     @property
     def field_type(self):
-        return 'string'
+        return "string"
 
 
-@configure.adapter(
-    for_=(IFileField, Interface, Interface),
-    provides=ISchemaFieldSerializeToJson)
-class DefaultFileSchemaFieldSerializer(DefaultSchemaFieldSerializer):
+class DefaultObjectSchemaFieldSerializer(DefaultSchemaFieldSerializer):
+    """
+    Basic object schema field
+    """
+
+    name_translations = {"max_length": "maxProperties", "min_length": "minProperties"}
+
+
+@configure.adapter(for_=(IFileField, Interface, Interface), provides=ISchemaFieldSerializeToJson)
+class DefaultFileSchemaFieldSerializer(DefaultObjectSchemaFieldSerializer):
+    @property
+    def field_type(self):
+        return "object"
+
+
+@configure.adapter(for_=(ITuple, Interface, Interface), provides=ISchemaFieldSerializeToJson)
+@configure.adapter(for_=(IList, Interface, Interface), provides=ISchemaFieldSerializeToJson)
+@configure.adapter(for_=(ISet, Interface, Interface), provides=ISchemaFieldSerializeToJson)
+@configure.adapter(for_=(IFrozenSet, Interface, Interface), provides=ISchemaFieldSerializeToJson)
+class DefaultListFieldSchemaFieldSerializer(DefaultObjectSchemaFieldSerializer):
+    name_translations = {"max_length": "maxItems", "min_length": "minItems"}
 
     @property
     def field_type(self):
-        return 'object'
+        return "array"
 
 
-@configure.adapter(
-    for_=(IPatchField, Interface, Interface),
-    provides=ISchemaFieldSerializeToJson)
-class DefaultPatchFieldSchemaFieldSerializer(DefaultSchemaFieldSerializer):
+@configure.adapter(for_=(IPatchField, Interface, Interface), provides=ISchemaFieldSerializeToJson)
+class DefaultPatchFieldSchemaFieldSerializer(DefaultObjectSchemaFieldSerializer):
+    @property
+    def name_translations(self):
+        if ICollection.providedBy(self.field.field):
+            return {"max_length": "maxItems", "min_length": "minItems"}
+        return super().name_translations
 
     def get_field(self):
         return self.field.field
@@ -167,144 +175,126 @@ class DefaultPatchFieldSchemaFieldSerializer(DefaultSchemaFieldSerializer):
     @property
     def field_type(self):
         if ICollection.providedBy(self.field.field):
-            return 'array'
-        return 'object'
+            return "array"
+        return "object"
 
 
-@configure.adapter(
-    for_=(ICloudFileField, Interface, Interface),
-    provides=ISchemaFieldSerializeToJson)
-class DefaultCloudFileSchemaFieldSerializer(DefaultSchemaFieldSerializer):
+@configure.adapter(for_=(ICloudFileField, Interface, Interface), provides=ISchemaFieldSerializeToJson)
+class DefaultCloudFileSchemaFieldSerializer(DefaultObjectSchemaFieldSerializer):
+    @property
+    def field_type(self):
+        return "object"
+
+
+@configure.adapter(for_=(IJSONField, Interface, Interface), provides=ISchemaFieldSerializeToJson)
+class DefaultJSONFieldSerializer(DefaultObjectSchemaFieldSerializer):
+    @property
+    def field_type(self):
+        return "object"
+
+    def serialize(self):
+        data = self.field.json_schema.copy()
+        for attr_name in ("title", "description"):
+            if attr_name not in data:
+                value = getattr(self.field, attr_name, None)
+                if value:
+                    data[attr_name] = value
+        return data
+
+
+@configure.adapter(for_=(ITextLine, Interface, Interface), provides=ISchemaFieldSerializeToJson)
+class DefaultTextLineSchemaFieldSerializer(DefaultTextSchemaFieldSerializer):
+    @property
+    def field_type(self):
+        return "string"
+
+
+@configure.adapter(for_=(IInt, Interface, Interface), provides=ISchemaFieldSerializeToJson)
+class DefaultNumberSchemaFieldSerializer(DefaultSchemaFieldSerializer):
+    name_translations = {"max": "maximum", "min": "maximum"}
 
     @property
     def field_type(self):
-        return 'object'
+        return "number"
 
 
-@configure.adapter(
-    for_=(IJSONField, Interface, Interface),
-    provides=ISchemaFieldSerializeToJson)
-class DefaultJSONFieldSerializer(DefaultSchemaFieldSerializer):
-
+@configure.adapter(for_=(IFloat, Interface, Interface), provides=ISchemaFieldSerializeToJson)
+class DefaultFloatSchemaFieldSerializer(DefaultNumberSchemaFieldSerializer):
     @property
     def field_type(self):
-        return 'object'
+        return "number"
 
 
-@configure.adapter(
-    for_=(ITextLine, Interface, Interface),
-    provides=ISchemaFieldSerializeToJson)
-class DefaultTextLineSchemaFieldSerializer(DefaultSchemaFieldSerializer):
-
-    @property
-    def field_type(self):
-        return 'string'
-
-
-@configure.adapter(
-    for_=(IFloat, Interface, Interface),
-    provides=ISchemaFieldSerializeToJson)
-class DefaultFloatSchemaFieldSerializer(DefaultSchemaFieldSerializer):
-
-    @property
-    def field_type(self):
-        return 'number'
-
-
-@configure.adapter(
-    for_=(IInt, Interface, Interface),
-    provides=ISchemaFieldSerializeToJson)
-class DefaultIntSchemaFieldSerializer(DefaultSchemaFieldSerializer):
-
-    @property
-    def field_type(self):
-        return 'integer'
-
-
-@configure.adapter(
-    for_=(IBool, Interface, Interface),
-    provides=ISchemaFieldSerializeToJson)
+@configure.adapter(for_=(IBool, Interface, Interface), provides=ISchemaFieldSerializeToJson)
 class DefaultBoolSchemaFieldSerializer(DefaultSchemaFieldSerializer):
-
     @property
     def field_type(self):
-        return 'boolean'
+        return "boolean"
 
 
-@configure.adapter(
-    for_=(ICollection, Interface, Interface),
-    provides=ISchemaFieldSerializeToJson)
+@configure.adapter(for_=(ICollection, Interface, Interface), provides=ISchemaFieldSerializeToJson)
 class DefaultCollectionSchemaFieldSerializer(DefaultSchemaFieldSerializer):
-
     @property
     def field_type(self):
-        return 'array'
+        return "array"
 
 
-@configure.adapter(
-    for_=(IChoice, Interface, Interface),
-    provides=ISchemaFieldSerializeToJson)
-class DefaultChoiceSchemaFieldSerializer(DefaultSchemaFieldSerializer):
-
+@configure.adapter(for_=(IChoice, Interface, Interface), provides=ISchemaFieldSerializeToJson)
+class DefaultChoiceSchemaFieldSerializer(DefaultTextSchemaFieldSerializer):
     @property
     def field_type(self):
-        return 'array'
+        return "string"
 
 
-@configure.adapter(
-    for_=(IObject, Interface, Interface),
-    provides=ISchemaFieldSerializeToJson)
-class DefaultObjectSchemaFieldSerializer(DefaultSchemaFieldSerializer):
-
+@configure.adapter(for_=(IObject, Interface, Interface), provides=ISchemaFieldSerializeToJson)
+class DefaultObjectFieldSchemaFieldSerializer(DefaultObjectSchemaFieldSerializer):
     @property
     def field_type(self):
-        return 'object'
+        return "object"
 
 
-@configure.adapter(
-    for_=(IDatetime, Interface, Interface),
-    provides=ISchemaFieldSerializeToJson)
-class DefaultDateTimeSchemaFieldSerializer(DefaultSchemaFieldSerializer):
-
+@configure.adapter(for_=(IDatetime, Interface, Interface), provides=ISchemaFieldSerializeToJson)
+class DefaultDateTimeSchemaFieldSerializer(DefaultTextSchemaFieldSerializer):
     @property
     def field_type(self):
-        return 'datetime'
-
-
-@configure.adapter(
-    for_=(IDate, Interface, Interface),
-    provides=ISchemaFieldSerializeToJson)
-class DefaultDateSchemaFieldSerializer(DefaultSchemaFieldSerializer):
+        return "string"
 
     @property
-    def field_type(self):
-        return 'date'
+    def format(self):
+        return "date-time"
 
 
-@configure.adapter(
-    for_=(ITime, Interface, Interface),
-    provides=ISchemaFieldSerializeToJson)
-class DefaultTimeSchemaFieldSerializer(DefaultSchemaFieldSerializer):
-
+@configure.adapter(for_=(IDate, Interface, Interface), provides=ISchemaFieldSerializeToJson)
+class DefaultDateSchemaFieldSerializer(DefaultTextSchemaFieldSerializer):
     @property
     def field_type(self):
-        return 'time'
-
-
-@configure.adapter(
-    for_=(IDict, Interface, Interface),
-    provides=ISchemaFieldSerializeToJson)
-class DefaultDictSchemaFieldSerializer(DefaultSchemaFieldSerializer):
+        return "string"
 
     @property
-    def field_type(self):
-        return 'object'
+    def format(self):
+        return "date"
 
 
-@configure.adapter(
-    for_=(IDecimal, Interface, Interface),
-    provides=ISchemaFieldSerializeToJson)
-class DefaultDecimalSchemaFieldSerializer(DefaultSchemaFieldSerializer):
+@configure.adapter(for_=(ITime, Interface, Interface), provides=ISchemaFieldSerializeToJson)
+class DefaultTimeSchemaFieldSerializer(DefaultTextSchemaFieldSerializer):
     @property
     def field_type(self):
-        return 'decimal'
+        return "string"
+
+    @property
+    def format(self):
+        return "time"
+
+
+@configure.adapter(for_=(IDict, Interface, Interface), provides=ISchemaFieldSerializeToJson)
+class DefaultDictSchemaFieldSerializer(DefaultObjectSchemaFieldSerializer):
+    @property
+    def field_type(self):
+        return "object"
+
+
+@configure.adapter(for_=(IDecimal, Interface, Interface), provides=ISchemaFieldSerializeToJson)
+class DefaultDecimalSchemaFieldSerializer(DefaultNumberSchemaFieldSerializer):
+    @property
+    def field_type(self):
+        return "number"

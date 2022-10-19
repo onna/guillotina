@@ -2,15 +2,23 @@
 
 `guillotina` and its addons define a global configuration that is used.
 All of these settings are configurable by providing a
-JSON configuration file to the start script.
+JSON configuration file or yaml to the start script.
 
 By default, the startup script looks for a `config.yaml` file. You can use a different
 file by using the `-c` option for the script like this: `./bin/guillotina -c myconfig.yaml`.
 
+## Applications
+
+To load guillotina applications into your application, use the `applications` setting:
+
+```yaml
+applications:
+  - guillotina_elasticsearch
+```
 
 ## Databases
 
-Guillotina uses PostgreSQL out-of-the-box.
+Guillotina can use PostgreSQL out-of-the-box.
 
 To configure available databases, use the `databases` option. Configuration options
 map 1-to-1 to database setup:
@@ -18,23 +26,50 @@ map 1-to-1 to database setup:
 ```yaml
 ---
 databases:
-  - db:
-      storage: postgresql
-      dsn:
-        scheme: postgres
-        dbname: guillotina
-        user: postgres
-        host: localhost
-        password: ''
-        port: 5432
-      read_only: false
+  db:
+    storage: postgresql
+    dsn: postgresql://postgres@localhost:5432/guillotina
+    read_only: false
+    pool_size: 40
+    read_only: false
+    statement_cache_size: 100
+    max_cached_statement_lifetime: 300
 ```
+
+In this configuration, the `db` key referenced in configuration here will be mapped
+to the url `http://localhost:8080/db`.
 
 Currently supported database drivers are:
 
 - `postgresql`
-- `cockroach`
+- `DUMMY`: in-memory database, useful in testing
+- `DUMMY_FILE`: simple file storage, useful in testing
 
+### Database configuration options
+
+- `pool_size`: Size of connection pool. (defaults to `13`)
+- `transaction_strategy`: Connection strategy to use. See `Transaction strategy`\_ for details. (defaults to `resolve_readcommitted`)
+- `conn_acquire_timeout`: How long to wait for connection to be freed up from pool. (defaults to `20`)
+- `objects_table_name`: Table name to store object data. (defaults to `objects`)
+- `blobs_table_name`: Table name to store blob data. (defaults to `blobs`)
+- `autovacuum`: Default vacuum relies on pg referential integrity to delete all objects. If you have extremely large databases,
+  this can be very heavy on pg. Set this to `false` and run the `dbvacuum` command in a cronjob. (defaults to `true`)
+
+### Storages
+
+Guillotina also provides the ability to dynamically create databases with the `@storages` endpoint.
+But in order to utilitize this feature, you need to configure the databases connection settings.
+
+These are configured in much of the same way as databases.
+
+```yaml
+storages:
+  bucket:
+    storage: postgresql
+    dsn: postgresql://postgres@localhost:5432
+```
+
+Notice how it's missing the database part of the dsn.
 
 ## Static files
 
@@ -45,7 +80,6 @@ static:
 ```
 
 These files will then be available on urls `/favicon.ico` and `/static_files`.
-
 
 ## JavaScript Applications
 
@@ -73,7 +107,7 @@ root_user:
 ```yaml
 cors:
   allow_origin:
-    - "*"
+    - '*'
   allow_methods:
     - GET
     - POST
@@ -82,9 +116,9 @@ cors:
     - PATCH
     - PUT
   allow_headers:
-    - "*"
+    - '*'
   expose_headers:
-    - "*"
+    - '*'
   allow_credentials: true
   max_age: 3660
 ```
@@ -99,12 +133,18 @@ applications:
   - guillotina_elasticsearch
 ```
 
-
 ## Async utilities
 
+Guillotina has support for injecting dependencies from configuration with
+asynchronous utility.
+
+An async utility is a class that implements `initialize` and `finalize` method.
+The `initialize` method is run at application start as a task. This gives
+you the power to hook async tasks into guillotina.
+
 ```yaml
-utilities:
-  -
+load_utilities:
+  catalog:
     provides: guillotina.interfaces.ICatalogUtility
     factory: guillotina_elasticsearch.utility.ElasticSearchUtility
     settings: {}
@@ -124,7 +164,6 @@ middlewares:
 
 You can pass `aiohttp_settings` to configure the aiohttp server.
 
-
 ```yaml
 aiohttp_settings:
   client_max_size: 20971520
@@ -141,17 +180,31 @@ jwt:
   algorithm: HS256
 ```
 
+Additionally, to work with websockets, you'll need to configure the `jwk` setting:
+
+```yaml
+jwk:
+  k: QqzzWH1tYqQO48IDvW7VH7gvJz89Ita7G6APhV-uLMo
+  kty: oct
+```
 
 ## Miscellaneous settings
 
 - `port` (number): Port to bind to. _defaults to `8080`_
 - `access_log_format` (string): Customize access log format for aiohttp. _defaults to `None`_
-- `store_json` (boolean): Serialize object into json field in database. _defaults to `true`_
+- `store_json` (boolean): Serialize object into json field in database. _defaults to `false`_
 - `host` (string): Where to host the server. _defaults to `"0.0.0.0"`_
 - `port` (number): Port to bind to. _defaults to `8080`_
 - `conflict_retry_attempts` (number): Number of times to retry database conflict errors. _defaults to `3`_
 - `cloud_storage` (string): Dotted path to cloud storage field type. _defaults to `"guillotina.interfaces.IDBFileField"`_
-
+- `loop_policy`: (string): Be able to customize the event loop policy used. For example, to use
+  uvloop, set this value to `uvloop.EventLoopPolicy`.
+- `router`: be able to customize the main aiohttp Router class
+- `oid_generator`: be able to customize the function used to generate oids on the system.
+  defaults to `guillotina.db.oid.generate_oid`
+- `cors_renderer`: customize the cors renderer, defaults to `guillotina.cors.DefaultCorsRenderer`
+- `request_indexer`: customize the class used to index content, defaults to
+  `guillotina.catalog.index.RequestIndexer`
 
 ## Transaction strategy
 
@@ -174,13 +227,7 @@ databases:
   - db:
       storage: postgresql
       transaction_strategy: resolve
-      dsn:
-        scheme: postgres
-        dbname: guillotina
-        user: postgres
-        host: localhost
-        password: ''
-        port: 5432
+      dsn: postgresql://postgres@localhost:5432/guillotina
 ```
 
 Available options:
@@ -209,12 +256,10 @@ Available options:
   are writing to different objects.
 - `resolve_readcommitted`:
   Same as resolve however, db transaction only started at commit phase. This
-  should provide better performance; however, you'll need to consider that side
+  should provide better performance; however, you'll need to consider the side
   affects of this for reading data.
 
-
 Warning: not all storages are compatible with all transaction strategies.
-
 
 ## Connection class
 
@@ -224,3 +269,66 @@ a way to override it with a custom class or a provided lighter one:
 ```yaml
 pg_connection_class: guillotina.db.storages.pg.LightweightConnection
 ```
+
+## Authentication and Authorization
+
+### Extractors
+
+`auth_extractors` are what you can configure to decide how we extract potential
+credential information from a request.
+
+The default value is:
+
+```yaml
+auth_extractors
+- guillotina.auth.extractors.BearerAuthPolicy
+- guillotina.auth.extractors.BasicAuthPolicy
+- guillotina.auth.extractors.WSTokenAuthPolicy
+```
+
+However, there is also a `guillotina.auth.extractors.CookiePolicy` available if you
+want to extract a credential from an `auth_token` cookie as well.
+
+Available:
+
+- guillotina.auth.extractors.BearerAuthPolicy: Looks for `Bearer` Authorization header
+- guillotina.auth.extractors.BasicAuthPolicy: Looks for `Basic` Authorization header
+- guillotina.auth.extractors.WSTokenAuthPolicy: Looks for `ws_token` query param
+
+### Identifiers
+
+`auth_user_identifiers` is a mechanism to customize how we lookup and validate
+users against an extracted credential.
+
+For example, this is the main part of what
+[guillotina_dbusers](https://github.com/guillotinaweb/guillotina_dbusers) does
+and the only configuration setting it needs/provides.
+
+By default, guillotina does not provide a user identifier plugin and only authenticates
+the root user/password.
+
+### Validators
+
+`auth_token_validators` allows you to customize what kind of values we'll athorize extracted
+credentials and identified users against.
+
+- guillotina.auth.validators.JWTValidator: Validate extract jwt token
+- guillotina.auth.validators.SaltedHashPasswordValidator: Validate extracted password against
+  stored salted and hashed password
+
+## Configuration life cycle
+
+Guillotina and `applications` you define might provide their own configuration that you can override
+but they might also override the default configuration of guillotina as well.
+
+Guillotina configuration is not considered fully loaded until the entire application has started up
+and finished loading all it's dependencies.
+
+Because of this, you can not reference global `app_settings` at module scope or in any application
+startup code.
+
+The order of application configuration and override loading in order of more precedence to lower is:
+
+- startup yaml/json file
+- applications defined in the `applications` configuration, in order
+- guillotina base configuration

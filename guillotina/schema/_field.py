@@ -38,6 +38,7 @@ from guillotina.schema.exceptions import ValidationError
 from guillotina.schema.exceptions import WrongContainedType
 from guillotina.schema.exceptions import WrongType
 from guillotina.schema.fieldproperty import FieldProperty
+from guillotina.schema.interfaces import IArrayJSONField
 from guillotina.schema.interfaces import IASCII
 from guillotina.schema.interfaces import IASCIILine
 from guillotina.schema.interfaces import IBaseVocabulary
@@ -62,6 +63,7 @@ from guillotina.schema.interfaces import IJSONField
 from guillotina.schema.interfaces import IList
 from guillotina.schema.interfaces import IMinMaxLen
 from guillotina.schema.interfaces import IObject
+from guillotina.schema.interfaces import IObjectJSONField
 from guillotina.schema.interfaces import IPassword
 from guillotina.schema.interfaces import ISet
 from guillotina.schema.interfaces import ISource
@@ -71,11 +73,13 @@ from guillotina.schema.interfaces import ITextLine
 from guillotina.schema.interfaces import ITime
 from guillotina.schema.interfaces import ITimedelta
 from guillotina.schema.interfaces import ITuple
+from guillotina.schema.interfaces import IUnionField
 from guillotina.schema.interfaces import IURI
 from guillotina.schema.utils import make_binary
 from guillotina.schema.vocabulary import getVocabularyRegistry
 from guillotina.schema.vocabulary import SimpleVocabulary
 from guillotina.schema.vocabulary import VocabularyRegistryError
+from zope.interface import alsoProvides
 from zope.interface import classImplements
 from zope.interface import implementer
 from zope.interface import Interface
@@ -88,21 +92,21 @@ import jsonschema
 import re
 
 
-__docformat__ = 'restructuredtext'
+__docformat__ = "restructuredtext"
 
 # pep 8 friendlyness
 Container
 
 # Fix up bootstrap field types
-Field.title = FieldProperty(IField['title'])  # type: ignore
-Field.description = FieldProperty(IField['description'])  # type: ignore
-Field.required = FieldProperty(IField['required'])  # type: ignore
-Field.readonly = FieldProperty(IField['readonly'])  # type: ignore
+Field.title = FieldProperty(IField["title"])  # type: ignore
+Field.description = FieldProperty(IField["description"])  # type: ignore
+Field.required = FieldProperty(IField["required"])  # type: ignore
+Field.readonly = FieldProperty(IField["readonly"])  # type: ignore
 # Default is already taken care of
 classImplements(Field, IField)
 
-MinMaxLen.min_length = FieldProperty(IMinMaxLen['min_length'])  # type: ignore
-MinMaxLen.max_length = FieldProperty(IMinMaxLen['max_length'])  # type: ignore
+MinMaxLen.min_length = FieldProperty(IMinMaxLen["min_length"])  # type: ignore
+MinMaxLen.max_length = FieldProperty(IMinMaxLen["max_length"])  # type: ignore
 
 classImplements(Text, IText)
 classImplements(TextLine, ITextLine)
@@ -135,7 +139,7 @@ class Bytes(MinMaxLen, Field):
 NativeString = Text
 
 
-@implementer(IASCII)
+@implementer(IASCII)  # type: ignore
 class ASCII(NativeString):
     __doc__ = IASCII.__doc__
 
@@ -153,19 +157,19 @@ class BytesLine(Bytes):
 
     def constraint(self, value):
         # TODO: we should probably use a more general definition of newlines
-        return b'\n' not in value
+        return b"\n" not in value
 
 
 NativeStringLine = TextLine
 
 
-@implementer(IASCIILine)
+@implementer(IASCIILine)  # type: ignore
 class ASCIILine(ASCII):
     __doc__ = IASCIILine.__doc__
 
     def constraint(self, value):
         # TODO: we should probably use a more general definition of newlines
-        return '\n' not in value
+        return "\n" not in value
 
 
 @implementer(IFloat, IFromUnicode)
@@ -198,7 +202,7 @@ class Decimal(Orderable, Field):
         try:
             v = decimal.Decimal(uc)
         except decimal.InvalidOperation:
-            raise ValueError('invalid literal for Decimal(): %s' % uc)
+            raise ValueError("invalid literal for Decimal(): %s" % uc)
         self.validate(v)
         return v
 
@@ -244,24 +248,17 @@ class Choice(Field):
     def __init__(self, values=None, vocabulary=None, source=None, **kw):
         """Initialize object."""
         if vocabulary is not None:
-            if (not isinstance(vocabulary, str) and
-                    not IBaseVocabulary.providedBy(vocabulary)):
-                raise ValueError('vocabulary must be a string or implement '
-                                 'IBaseVocabulary')
+            if not isinstance(vocabulary, str) and not IBaseVocabulary.providedBy(vocabulary):
+                raise ValueError("vocabulary must be a string or implement " "IBaseVocabulary")
             if source is not None:
-                raise ValueError(
-                    "You cannot specify both source and vocabulary.")
+                raise ValueError("You cannot specify both source and vocabulary.")
         elif source is not None:
             vocabulary = source
 
-        if (values is None and vocabulary is None):
-            raise ValueError(
-                "You must specify either values or vocabulary."
-            )
+        if values is None and vocabulary is None:
+            raise ValueError("You must specify either values or vocabulary.")
         if values is not None and vocabulary is not None:
-            raise ValueError(
-                "You cannot specify both values and vocabulary."
-            )
+            raise ValueError("You cannot specify both values and vocabulary.")
 
         self.vocabulary = None
         self.vocabularyName = None
@@ -270,17 +267,15 @@ class Choice(Field):
         elif isinstance(vocabulary, str):
             self.vocabularyName = vocabulary
         else:
-            if (not ISource.providedBy(vocabulary) and
-                    not IContextSourceBinder.providedBy(vocabulary)):
-                raise ValueError('Invalid vocabulary')
+            if not ISource.providedBy(vocabulary) and not IContextSourceBinder.providedBy(vocabulary):
+                raise ValueError("Invalid vocabulary")
             self.vocabulary = vocabulary
         # Before a default value is checked, it is validated. However, a
         # named vocabulary is usually not complete when these fields are
         # initialized. Therefore signal the validation method to ignore
         # default value checks during initialization of a Choice tied to a
         # registered vocabulary.
-        self._init_field = (bool(self.vocabularyName) or
-                            IContextSourceBinder.providedBy(self.vocabulary))
+        self._init_field = bool(self.vocabularyName) or IContextSourceBinder.providedBy(self.vocabulary)
         super(Choice, self).__init__(**kw)
         self._init_field = False
 
@@ -297,7 +292,7 @@ class Choice(Field):
             clone.vocabulary = vr.get(object, self.vocabularyName)
 
         if not ISource.providedBy(clone.vocabulary):
-            raise ValueError('Invalid clone vocabulary')
+            raise ValueError("Invalid clone vocabulary")
 
         return clone
 
@@ -326,7 +321,7 @@ class Choice(Field):
 _isuri = re.compile(r"[a-zA-z0-9+.-]+:\S*$").match
 
 
-@implementer(IURI, IFromUnicode)
+@implementer(IURI, IFromUnicode)  # type: ignore
 class URI(NativeStringLine):
     """URI schema field
     """
@@ -350,10 +345,11 @@ _isdotted = re.compile(
     r"([a-zA-Z][a-zA-Z0-9_]*)"
     r"([.][a-zA-Z][a-zA-Z0-9_]*)*"
     # use the whole line
-    r"$").match
+    r"$"
+).match
 
 
-@implementer(IDottedName)
+@implementer(IDottedName)  # type: ignore
 class DottedName(NativeStringLine):
     """Dotted name field.
 
@@ -380,22 +376,19 @@ class DottedName(NativeStringLine):
             raise InvalidDottedName(value)
         dots = value.count(".")
         if dots < self.min_dots:
-            raise InvalidDottedName(
-                "too few dots; %d required" % self.min_dots, value
-            )
+            raise InvalidDottedName("too few dots; %d required" % self.min_dots, value)
         if self.max_dots is not None and dots > self.max_dots:
-            raise InvalidDottedName("too many dots; no more than %d allowed" %
-                                    self.max_dots, value)
+            raise InvalidDottedName("too many dots; no more than %d allowed" % self.max_dots, value)
 
     def from_unicode(self, value):
         v = value.strip()
         if not isinstance(v, self._type):
-            v = v.encode('ascii')
+            v = v.encode("ascii")
         self.validate(v)
         return v
 
 
-@implementer(IId, IFromUnicode)
+@implementer(IId, IFromUnicode)  # type: ignore
 class Id(NativeStringLine):
     """Id field
 
@@ -416,7 +409,7 @@ class Id(NativeStringLine):
         """
         v = value.strip()
         if not isinstance(v, self._type):
-            v = v.encode('ascii')
+            v = v.encode("ascii")
         self.validate(v)
         return v
 
@@ -467,25 +460,26 @@ def _validate_sequence(value_type, value, errors=None):
 
 
 def _validate_uniqueness(value):
-    temp_values = []
-    for item in value:
-        if item in temp_values:
-            raise NotUnique(item)
-
-        temp_values.append(item)
+    # very slow to go item by item in iterable
+    compared_to = set(value)
+    if len(compared_to) != len(value):
+        raise NotUnique()
 
 
 class AbstractCollection(MinMaxLen, Iterable):
     value_type = None
     unique = False
+    naive = False
 
-    def __init__(self, value_type=None, unique=False, **kw):
+    def __init__(self, value_type=None, unique=False, naive=False, **kw):
         super(AbstractCollection, self).__init__(**kw)
         # whine if value_type is not a field
         if value_type is not None and not IField.providedBy(value_type):
             raise ValueError("'value_type' must be field instance.")
         self.value_type = value_type
         self.unique = unique
+        # naive designates if a field's sub type should be validated or not
+        self.naive = naive
 
     def bind(self, object):
         """See guillotina.schema._bootstrapinterfaces.IField."""
@@ -498,9 +492,10 @@ class AbstractCollection(MinMaxLen, Iterable):
 
     def _validate(self, value):
         super(AbstractCollection, self)._validate(value)
-        errors = _validate_sequence(self.value_type, value)
-        if errors:
-            raise WrongContainedType(errors, self.__name__)
+        if not self.naive:
+            errors = _validate_sequence(self.value_type, value)
+            if errors:
+                raise WrongContainedType(errors, self.__name__)
         if self.unique:
             _validate_uniqueness(value)
 
@@ -508,24 +503,26 @@ class AbstractCollection(MinMaxLen, Iterable):
 @implementer(ITuple)
 class Tuple(AbstractCollection):
     """A field representing a Tuple."""
+
     _type = tuple
 
 
 @implementer(IList)
 class List(AbstractCollection):
     """A field representing a List."""
+
     _type = list
 
 
 @implementer(ISet)
 class Set(AbstractCollection):
     """A field representing a set."""
+
     _type = set
 
     def __init__(self, **kw):
-        if 'unique' in kw:  # set members are always unique
-            raise TypeError(
-                "__init__() got an unexpected keyword argument 'unique'")
+        if "unique" in kw:  # set members are always unique
+            raise TypeError("__init__() got an unexpected keyword argument 'unique'")
         super(Set, self).__init__(unique=True, **kw)
 
 
@@ -534,9 +531,8 @@ class FrozenSet(AbstractCollection):
     _type = frozenset
 
     def __init__(self, **kw):
-        if 'unique' in kw:  # set members are always unique
-            raise TypeError(
-                "__init__() got an unexpected keyword argument 'unique'")
+        if "unique" in kw:  # set members are always unique
+            raise TypeError("__init__() got an unexpected keyword argument 'unique'")
         super(FrozenSet, self).__init__(unique=True, **kw)
 
 
@@ -603,10 +599,16 @@ class Object(Field):
         if isinstance(value, dict):
             # Dicts are validated differently
             valid_type = namedtuple(
-                'temp_validate_type',
-                set(self.schema.names()) & set(value.keys()))
+                "temp_validate_type", set(self.schema.names(all=True)) & set(value.keys())
+            )
+
             # check the value against schema
-            errors = _validate_fields(self.schema, valid_type(**value))
+            try:
+                t = valid_type(**value)
+            except TypeError:
+                raise SchemaNotProvided
+
+            errors = _validate_fields(self.schema, t)
         else:
             if not self.schema.providedBy(value):
                 raise SchemaNotProvided
@@ -618,11 +620,13 @@ class Object(Field):
 @implementer(IDict)
 class Dict(MinMaxLen, Iterable):
     """A field representing a Dict."""
+
     _type = dict
     key_type = None
     value_type = None
+    naive = False
 
-    def __init__(self, key_type=None, value_type=None, **kw):
+    def __init__(self, key_type=None, value_type=None, naive=False, **kw):
         super(Dict, self).__init__(**kw)
         # whine if key_type or value_type is not a field
         if key_type is not None and not IField.providedBy(key_type):
@@ -631,21 +635,18 @@ class Dict(MinMaxLen, Iterable):
             raise ValueError("'value_type' must be field instance.")
         self.key_type = key_type
         self.value_type = value_type
+        self.naive = naive
 
     def _validate(self, value):
         super(Dict, self)._validate(value)
         errors = []
-        try:
+        if not self.naive:
             if self.value_type:
-                errors = _validate_sequence(self.value_type, value.values(),
-                                            errors)
+                errors = _validate_sequence(self.value_type, value.values(), errors)
             errors = _validate_sequence(self.key_type, value, errors)
 
-            if errors:
-                raise WrongContainedType(errors, self.__name__)
-
-        finally:
-            errors = None
+        if errors:
+            raise WrongContainedType(errors, self.__name__)
 
     def bind(self, object):
         """See guillotina.schema._bootstrapinterfaces.IField."""
@@ -659,29 +660,74 @@ class Dict(MinMaxLen, Iterable):
         return clone
 
 
-DEFAULT_JSON_SCHMEA = json.dumps({
-    'type': 'object',
-    'properties': {}
-})
+DEFAULT_JSON_SCHMEA = json.dumps({"type": "object", "properties": {}})
 
 
 @implementer(IJSONField)
 class JSONField(Field):
+    json_schema = schema_validator = None
 
     def __init__(self, schema=DEFAULT_JSON_SCHMEA, **kw):
-        if not isinstance(schema, str):
-            raise WrongType
 
-        try:
-            self.json_schema = json.loads(schema)
-        except ValueError:
+        if isinstance(schema, str):
+            try:
+                self.json_schema = json.loads(schema)
+            except ValueError:
+                raise WrongType
+        elif not isinstance(schema, dict):
             raise WrongType
+        else:
+            self.json_schema = schema
+
+        jsonschema_validator = jsonschema.validators.validator_for(self.json_schema)
+        jsonschema_validator.check_schema(self.json_schema)
+        self.schema_validator = jsonschema_validator(self.json_schema)
+        if self.json_schema.get("type") == "array":
+            alsoProvides(self, IArrayJSONField)
+        elif self.json_schema.get("type") == "object":
+            alsoProvides(self, IObjectJSONField)
+
         super(JSONField, self).__init__(**kw)
 
     def _validate(self, value):
         super(JSONField, self)._validate(value)
 
         try:
-            jsonschema.validate(value, self.json_schema)
+            self.schema_validator.validate(value)
         except jsonschema.ValidationError as e:
-            raise WrongContainedType(e.message, self.__name__)
+            raise WrongContainedType(
+                f"Failed to validate {'.'.join(e.absolute_schema_path)} with {e.validator_value}"
+            )
+
+
+@implementer(IUnionField)
+class UnionField(Field):
+    __doc__ = IUnionField.__doc__
+
+    def __init__(self, *fields, **kw):
+        self.fields = fields
+        super().__init__(**kw)
+
+    def bind(self, object):
+        clone = super().bind(object)
+        bound_fields = []
+        for field in self.fields:
+            bound_fields.append(field.bind(object))
+        clone.fields = bound_fields
+        return clone
+
+    def validate(self, value):
+        errors = []
+        for field in self.fields:
+            try:
+                field.validate(value)
+                return field
+            except ValidationError as error:
+                errors.append(error)
+        else:
+            raise WrongContainedType(errors, self.__name__)
+
+    def set(self, object, value):
+        field = self.validate(value)
+        field.__name__ = self.__name__
+        field.set(object, value)

@@ -1,10 +1,12 @@
 from aiohttp import web
+from aiohttp.web_exceptions import HTTPConflict
+from copy import deepcopy
 from guillotina import configure
 from guillotina import glogging
+from guillotina import task_vars
 from guillotina._settings import app_settings
-from guillotina.async_util import IAsyncUtility
+from guillotina._settings import default_settings
 from guillotina.behaviors import apply_concrete_behaviors
-from guillotina.component import get_all_utilities_registered_for
 from guillotina.component import get_utility
 from guillotina.component import provide_utility
 from guillotina.configure.config import ConfigurationMachine
@@ -12,6 +14,13 @@ from guillotina.content import JavaScriptApplication
 from guillotina.content import load_cached_schema
 from guillotina.content import StaticDirectory
 from guillotina.content import StaticFile
+from guillotina.event import notify
+from guillotina.events import AfterAsyncUtilityLoadedEvent
+from guillotina.events import ApplicationCleanupEvent
+from guillotina.events import ApplicationConfiguredEvent
+from guillotina.events import ApplicationInitializedEvent
+from guillotina.events import BeforeAsyncUtilityLoadedEvent
+from guillotina.events import DatabaseInitializedEvent
 from guillotina.exceptions import ConflictError
 from guillotina.exceptions import TIDConflictError
 from guillotina.factory.content import ApplicationRoot
@@ -19,106 +28,196 @@ from guillotina.interfaces import IApplication
 from guillotina.interfaces import IDatabase
 from guillotina.interfaces import IDatabaseConfigurationFactory
 from guillotina.request import Request
-from guillotina.response import HTTPConflict
 from guillotina.traversal import TraversalRouter
 from guillotina.utils import lazy_apply
 from guillotina.utils import list_or_dict_items
-from guillotina.utils import loop_apply_coroutine
 from guillotina.utils import resolve_dotted_name
 from guillotina.utils import resolve_path
+from guillotina.utils import secure_passphrase
+from jwcrypto import jwk
 
-import aiotask_context
 import asyncio
 import json
+import logging
 import logging.config
-from typing import Optional
-from types import ModuleType
 
-RSA: Optional[ModuleType] = None
+
 try:
-    from Crypto.PublicKey import RSA
+    from aiohttp.web_log import AccessLogger  # type: ignore
 except ImportError:
-    pass
+    from aiohttp.helpers import AccessLogger  # type: ignore
 
 
-logger = glogging.getLogger('guillotina')
+app_logger = logging.getLogger("guillotina")
+logger = glogging.getLogger("guillotina")
 
 
 def update_app_settings(settings):
     for key, value in settings.items():
-        if (isinstance(app_settings.get(key), dict) and
-                isinstance(value, dict)):
+        if isinstance(app_settings.get(key), dict) and isinstance(value, dict):
             app_settings[key].update(value)
         else:
             app_settings[key] = value
 
 
+class ApplicationConfigurator:
+    def __init__(self, applications, config, root, settings, configured=None):
+        if configured is None:
+            configured = []
+        # remove duplicates
+        self.applications = list(dict.fromkeys(applications))
+        self.configured = configured
+        self.config = config
+        self.root = root
+        self.settings = settings
+        self.contrib_apps = [
+            "guillotina.contrib.catalog.pg",
+            "guillotina.contrib.redis",
+            "guillotina.contrib.cache",
+            "guillotina.contrib.pubsub",
+        ]
+        self._init_dependency_applictions()
+
+    def _init_dependency_applictions(self):
+        for application_name in self.applications[:]:
+            module = resolve_dotted_name(application_name)
+            if hasattr(module, "app_settings") and app_settings != module.app_settings:
+                # load dependencies if necessary
+                for dependency in module.app_settings.get("applications") or []:
+                    if dependency not in self.applications:
+                        self.applications.append(dependency)
+
+    def load_application(self, module):
+        # includeme function
+        if hasattr(module, "includeme"):
+            lazy_apply(module.includeme, self.root, self.settings)
+        # app_settings
+        if hasattr(module, "app_settings") and app_settings != module.app_settings:
+            update_app_settings(module.app_settings)
+
+        # exclude configuration from sub packages that are registered
+        # as applications
+        excluded_modules = [
+            module_name
+            for module_name in set(self.applications) - set([module.__name__])
+            if not module.__name__.startswith(module_name)
+        ] + [module_name for module_name in self.contrib_apps if module_name != module.__name__]
+        # services
+        return configure.load_all_configurations(self.root.config, module.__name__, excluded_modules)
+
+    def configure_application(self, module_name):
+        if module_name in self.configured:
+            return
+
+        module = resolve_dotted_name(module_name)
+        if hasattr(module, "app_settings") and app_settings != module.app_settings:
+            # load dependencies if necessary
+            for dependency in module.app_settings.get("applications") or []:
+                if dependency not in self.configured and module_name != dependency:
+                    self.configure_application(dependency)
+
+        self.config.begin(module_name)
+        self.load_application(module)
+        self.config.execute_actions()
+        self.config.commit()
+
+        self.configured.append(module_name)
+
+    def configure_all_applications(self):
+        for module_name in self.applications:
+            self.configure_application(module_name)
+
+
+def configure_application(module_name, config, root, settings, configured):
+    app_configurator = ApplicationConfigurator([module_name], config, root, settings, configured)
+    app_configurator.configure_application(module_name)
+
+
 def load_application(module, root, settings):
-    # includeme function
-    if hasattr(module, 'includeme'):
-        lazy_apply(module.includeme, root, settings)
-    # app_settings
-    if hasattr(module, 'app_settings') and app_settings != module.app_settings:
-        update_app_settings(module.app_settings)
-    # services
-    configure.load_all_configurations(root.config, module.__name__)
+    app_configurator = ApplicationConfigurator([module.__name__], None, root, settings)
+    app_configurator.load_application(module)
 
 
 class GuillotinaAIOHTTPApplication(web.Application):
     async def _handle(self, request, retries=0):
-        aiotask_context.set('request', request)
+        task_vars.request.set(request)
+        for var in (
+            "txn",
+            "tm",
+            "futures",
+            "authenticated_user",
+            "security_policies",
+            "container",
+            "registry",
+            "db",
+        ):
+            # and make sure to reset various task vars...
+            getattr(task_vars, var).set(None)
         try:
             return await super()._handle(request)
         except (ConflictError, TIDConflictError) as e:
-            if app_settings.get('conflict_retry_attempts', 3) > retries:
-                label = 'DB Conflict detected'
+            if app_settings.get("conflict_retry_attempts", 3) > retries:
+                label = "DB Conflict detected"
                 if isinstance(e, TIDConflictError):
-                    label = 'TID Conflict Error detected'
-                tid = getattr(getattr(request, '_txn', None), '_tid', 'not issued')
-                logger.debug(
-                    f'{label}, retrying request, tid: {tid}, retries: {retries + 1})',
-                    exc_info=True)
+                    label = "TID Conflict Error detected"
+                tid = getattr(getattr(request, "_txn", None), "_tid", "not issued")
+                logger.debug(f"{label}, retrying request, tid: {tid}, retries: {retries + 1})", exc_info=True)
                 request._retry_attempt = retries + 1
                 request.clear_futures()
                 return await self._handle(request, retries + 1)
+            txn = task_vars.txn.get()
             logger.error(
-                'Exhausted retry attempts for conflict error on tid: {}'.format(
-                    getattr(getattr(request, '_txn', None), '_tid', 'not issued')
-                ))
-            return HTTPConflict()
+                "Exhausted retry attempts for conflict error on tid: {}".format(
+                    getattr(txn, "_tid", "not issued")
+                )
+            )
+            return HTTPConflict(body=json.dumps({"summary": str(e)}), content_type="application/json")
 
-    def _make_request(self, message, payload, protocol, writer, task,
-                      _cls=Request):
+    def _make_request(self, message, payload, protocol, writer, task, _cls=Request):
         return _cls(
-            message, payload, protocol, writer, task,
-            self._loop,
-            client_max_size=self._client_max_size)
+            message, payload, protocol, writer, task, self._loop, client_max_size=self._client_max_size
+        )
+
+    def _make_handler(self, *, loop=None, access_log_class=AccessLogger, **kwargs):
+        # allow us to register the server object that is running the app so that
+        # we can inspect active connections and requests
+        server = super()._make_handler(loop=loop, access_log_class=access_log_class, **kwargs)
+        self._server = server
+        return server
 
 
 def make_aiohttp_application():
-    middlewares = [resolve_dotted_name(m) for m in app_settings.get('middlewares', [])]
-    router_klass = app_settings.get('router', TraversalRouter)
+    middlewares = [resolve_dotted_name(m) for m in app_settings.get("middlewares", [])]
+    router_klass = app_settings.get("router", TraversalRouter)
     router = resolve_dotted_name(router_klass)()
     return GuillotinaAIOHTTPApplication(
-        router=router,
-        middlewares=middlewares,
-        **app_settings.get('aiohttp_settings', {}))
+        router=router, middlewares=middlewares, **app_settings.get("aiohttp_settings", {})
+    )
 
 
 _dotted_name_settings = (
-    'auth_extractors',
-    'auth_token_validators',
-    'auth_user_identifiers',
-    'pg_connection_class',
-    'oid_generator',
-    'cors_renderer',
-    'check_writable_request'
+    "auth_extractors",
+    "auth_token_validators",
+    "auth_user_identifiers",
+    "http_methods",
+    "pg_connection_class",
+    "cloud_storage",
+    "router",
+    "uid_generator",
+    "oid_generator",
+    "cors_renderer",
+    "check_writable_request",
+    "indexer",
+    "object_reader",
 )
 
+_moved = {"oid_generator": "uid_generator", "request_indexer": "indexer"}
+
+
 def optimize_settings(settings):
-    '''
+    """
     pre-render settings that come in as strings but are used by the app
-    '''
+    """
     for name in _dotted_name_settings:
         if name not in settings:
             continue
@@ -134,69 +233,82 @@ def optimize_settings(settings):
             settings[name] = resolve_dotted_name(new_val)
 
 
-def make_app(config_file=None, settings=None, loop=None, server_app=None):
+async def make_app(config_file=None, settings=None, loop=None, server_app=None):
+    """
+    Make application from configuration
+
+    :param config_file: path to configuration file to load
+    :param settings: dictionary of settings
+    :param loop: if not using with default event loop
+    :param settings: provide your own aiohttp application
+    """
+    # reset app_settings
+    startup_vars = {}
+    for key in app_settings.keys():
+        if key[0] == "_":
+            startup_vars[key] = app_settings[key]
+
+    app_settings.clear()
+    app_settings.update(startup_vars)
+    app_settings.update(deepcopy(default_settings))
 
     if loop is None:
         loop = asyncio.get_event_loop()
 
-    loop.set_task_factory(aiotask_context.task_factory)
-
     if config_file is not None:
-        with open(config_file, 'r') as config:
+        with open(config_file, "r") as config:
             settings = json.load(config)
     elif settings is None:
-        raise Exception('Neither configuration or settings')
+        raise Exception("Neither configuration or settings")
 
     # Create root Application
-    root = ApplicationRoot(config_file)
-    provide_utility(root, IApplication, 'root')
+    root = ApplicationRoot(config_file, loop)
+    provide_utility(root, IApplication, "root")
 
     # Initialize global (threadlocal) ZCA configuration
     config = root.config = ConfigurationMachine()
 
-    import guillotina
-    import guillotina.db.factory
-    import guillotina.db.writer
-    import guillotina.db.db
-    configure.scan('guillotina.renderers')
-    configure.scan('guillotina.api')
-    configure.scan('guillotina.content')
-    configure.scan('guillotina.registry')
-    configure.scan('guillotina.auth')
-    configure.scan('guillotina.json')
-    configure.scan('guillotina.behaviors')
-    configure.scan('guillotina.languages')
-    configure.scan('guillotina.permissions')
-    configure.scan('guillotina.security.security_local')
-    configure.scan('guillotina.security.policy')
-    configure.scan('guillotina.auth.participation')
-    configure.scan('guillotina.catalog.index')
-    configure.scan('guillotina.catalog.catalog')
-    configure.scan('guillotina.files')
-    configure.scan('guillotina.annotations')
-    configure.scan('guillotina.constraintypes')
-    configure.scan('guillotina.subscribers')
-    configure.scan('guillotina.db.strategies')
-    configure.scan('guillotina.db.cache')
-    configure.scan('guillotina.exc_resp')
-    configure.scan('guillotina.fields')
-    load_application(guillotina, root, settings)
-    config.execute_actions()
-    config.commit()
+    app_configurator = ApplicationConfigurator(settings.get("applications") or [], config, root, settings)
 
-    for module_name in settings.get('applications', []):
-        config.begin(module_name)
-        load_application(resolve_dotted_name(module_name), root, settings)
-        config.execute_actions()
-        config.commit()
+    configure.scan("guillotina.renderers")
+    configure.scan("guillotina.api")
+    configure.scan("guillotina.content")
+    configure.scan("guillotina.registry")
+    configure.scan("guillotina.auth")
+    configure.scan("guillotina.json")
+    configure.scan("guillotina.behaviors")
+    configure.scan("guillotina.languages")
+    configure.scan("guillotina.permissions")
+    configure.scan("guillotina.security.security_local")
+    configure.scan("guillotina.security.policy")
+    configure.scan("guillotina.catalog.index")
+    configure.scan("guillotina.catalog.catalog")
+    configure.scan("guillotina.files")
+    configure.scan("guillotina.annotations")
+    configure.scan("guillotina.constraintypes")
+    configure.scan("guillotina.subscribers")
+    configure.scan("guillotina.db.storages.vacuum")
+    configure.scan("guillotina.db.cache")
+    configure.scan("guillotina.db.writer")
+    configure.scan("guillotina.db.factory")
+    configure.scan("guillotina.exc_resp")
+    configure.scan("guillotina.fields")
+    configure.scan("guillotina.migrations")
+
+    # always load guillotina
+    app_configurator.configure_application("guillotina")
+    app_configurator.configure_all_applications()
 
     apply_concrete_behaviors()
 
     # update *after* plugins loaded
     update_app_settings(settings)
 
-    if 'logging' in app_settings:
-        logging.config.dictConfig(app_settings['logging'])
+    if "logging" in app_settings:
+        try:
+            logging.config.dictConfig(app_settings["logging"])
+        except Exception:
+            app_logger.error("Could not setup logging configuration", exc_info=True)
 
     # Make and initialize aiohttp app
     if server_app is None:
@@ -205,76 +317,93 @@ def make_app(config_file=None, settings=None, loop=None, server_app=None):
     server_app.root = root
     server_app.config = config
 
+    for k, v in _moved.items():
+        # for b/w compatibility, convert these
+        if k in app_settings:
+            app_settings[v] = app_settings[k]
+            del app_settings[k]
+
     optimize_settings(app_settings)
 
-    for key, dbconfig in list_or_dict_items(app_settings['databases']):
-        factory = get_utility(
-            IDatabaseConfigurationFactory, name=dbconfig['storage'])
-        root[key] = loop_apply_coroutine(loop, factory, key, dbconfig, loop)
+    await notify(ApplicationConfiguredEvent(server_app, loop))
 
-    for key, file_path in list_or_dict_items(app_settings['static']):
+    for key, dbconfig in list_or_dict_items(app_settings["databases"]):
+        factory = get_utility(IDatabaseConfigurationFactory, name=dbconfig["storage"])
+        root[key] = await factory(key, dbconfig, loop)
+        await notify(DatabaseInitializedEvent(root[key]))
+
+    for key, file_path in list_or_dict_items(app_settings["static"]):
         path = resolve_path(file_path).resolve()
         if not path.exists():
-            raise Exception('Invalid static directory {}'.format(file_path))
+            raise Exception("Invalid static directory {}".format(file_path))
         if path.is_dir():
             root[key] = StaticDirectory(path)
         else:
             root[key] = StaticFile(path)
 
-    for key, file_path in list_or_dict_items(app_settings['jsapps']):
+    for key, file_path in list_or_dict_items(app_settings["jsapps"]):
         path = resolve_path(file_path).resolve()
         if not path.exists() or not path.is_dir():
-            raise Exception('Invalid jsapps directory {}'.format(file_path))
+            raise Exception("Invalid jsapps directory {}".format(file_path))
         root[key] = JavaScriptApplication(path)
 
-    root.set_root_user(app_settings['root_user'])
+    root.set_root_user(app_settings["root_user"])
 
-    if RSA is not None and not app_settings.get('rsa'):
-        key = RSA.generate(2048)
-        pub_jwk = {'k': key.publickey().exportKey('PEM')}
-        priv_jwk = {'k': key.exportKey('PEM')}
-        app_settings['rsa'] = {
-            'pub': pub_jwk,
-            'priv': priv_jwk
-        }
+    if app_settings.get("jwk") and app_settings.get("jwk").get("k") and app_settings.get("jwk").get("kty"):
+        key = jwk.JWK.from_json(json.dumps(app_settings.get("jwk")))
+        app_settings["jwk"] = key
+        # {"k":"QqzzWH1tYqQO48IDvW7VH7gvJz89Ita7G6APhV-uLMo","kty":"oct"}
+
+    if not app_settings.get("debug") and app_settings["jwt"].get("secret"):
+        # validate secret
+        secret = app_settings["jwt"]["secret"]
+        if secret == "secret":
+            app_logger.warning(
+                "You are using a very insecure secret key in production mode. "
+                "It is strongly advised that you provide a better value for "
+                "`jwt.secret` in your config."
+            )
+        elif not secure_passphrase(app_settings["jwt"]["secret"]):
+            app_logger.warning(
+                "You are using a insecure secret key in production mode. "
+                "It is recommended that you provide a more complex value for "
+                "`jwt.secret` in your config."
+            )
 
     # Set router root
     server_app.router.set_root(root)
+    server_app.on_cleanup.append(cleanup_app)
 
-    for utility in get_all_utilities_registered_for(IAsyncUtility):
-        # In case there is Utilties that are registered
-        if hasattr(utility, 'initialize'):
-            task = asyncio.ensure_future(
-                lazy_apply(utility.initialize, app=server_app), loop=loop)
-            root.add_async_task(utility, task, {})
-        else:
-            logger.warn(f'No initialize method found on {utility} object')
-
-    server_app.on_cleanup.append(close_utilities)
-
-    for util in app_settings['utilities']:
-        root.add_async_utility(util, loop=loop)
+    for key, util in app_settings["load_utilities"].items():
+        app_logger.info("Adding " + key + " : " + util["provides"])
+        await notify(BeforeAsyncUtilityLoadedEvent(key, util))
+        result = root.add_async_utility(key, util, loop=loop)
+        if result is not None:
+            await notify(AfterAsyncUtilityLoadedEvent(key, util, *result))
 
     # Load cached Schemas
     load_cached_schema()
 
+    await notify(ApplicationInitializedEvent(server_app, loop))
+
     return server_app
 
 
+async def cleanup_app(app):
+    await notify(ApplicationCleanupEvent(app))
+    await close_utilities(app)
+    await close_dbs(app)
+
+
 async def close_utilities(app):
-    root = get_utility(IApplication, name='root')
-    for utility in get_all_utilities_registered_for(IAsyncUtility):
-        try:
-            root.cancel_async_utility(utility)
-        except KeyError:
-            # attempt to delete by the provider registration
-            try:
-                iface = [i for i in utility.__providedBy__][-1]
-                root.cancel_async_utility(iface.__identifier__)
-            except (AttributeError, IndexError, KeyError):
-                pass
-        if hasattr(utility, 'finalize'):
-            await lazy_apply(utility.finalize, app=app)
+    root = get_utility(IApplication, name="root")
+    for key in list(root._async_utilities.keys()):
+        app_logger.info("Removing " + key)
+        await root.del_async_utility(key)
+
+
+async def close_dbs(app):
+    root = get_utility(IApplication, name="root")
     for db in root:
         if IDatabase.providedBy(db[1]):
             await db[1].finalize()

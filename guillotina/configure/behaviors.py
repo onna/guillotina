@@ -16,9 +16,7 @@ REGISTRATION_REPR = """\
 
 @implementer(IBehavior)
 class BehaviorRegistration(object):
-
-    def __init__(self, title, description, interface,
-                 marker, factory, name=None, for_=Interface):
+    def __init__(self, title, description, interface, marker, factory, name=None, for_=Interface):
         self.title = title
         self.description = description
         self.interface = interface
@@ -30,26 +28,25 @@ class BehaviorRegistration(object):
     def __repr__(self):
         if self.marker is not None:
             marker_info = self.marker.__identifier__
-        elif self.marker is not None and self.marker is not self.interface:
-            marker_info = '(uses schema as marker)'
+        elif self.marker is not self.interface:
+            marker_info = "(uses schema as marker)"
         else:
-            marker_info = '(no marker is set)'
+            marker_info = "(no marker is set)"
         info = {
-            'class': self.__class__.__name__,
-            'id': id(self),
-            'name': self.name or '(unique name not set)',
-            'identifier': self.interface.__identifier__,
-            'marker': marker_info,
-            'factory': str(self.factory),
-            'title': self.title or '(no title)',
-            'description': self.description or '(no description)'
+            "class": self.__class__.__name__,
+            "id": id(self),
+            "name": self.name or "(unique name not set)",
+            "identifier": self.interface.__identifier__,
+            "marker": marker_info,
+            "factory": str(self.factory),
+            "title": self.title or "(no title)",
+            "description": self.description or "(no description)",
         }
         return REGISTRATION_REPR.format(**info)
 
 
 @implementer(IBehaviorAdapterFactory)
 class BehaviorAdapterFactory(object):
-
     def __init__(self, behavior):
         self.behavior = behavior
 

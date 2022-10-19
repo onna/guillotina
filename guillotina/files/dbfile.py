@@ -1,5 +1,7 @@
 from .field import BaseCloudFile
+from guillotina.blob import Blob
 from guillotina.interfaces import IDBFile
+from typing import Optional
 from zope.interface import implementer
 
 
@@ -7,7 +9,7 @@ from zope.interface import implementer
 class DBFile(BaseCloudFile):
     """File stored in a DB using blob storage"""
 
-    _blob = None
+    _blob: Optional[Blob] = None
 
     @property
     def valid(self):
@@ -27,3 +29,9 @@ class DBFile(BaseCloudFile):
     @size.setter
     def size(self, val):
         pass
+
+    @property
+    def chunks(self) -> int:
+        if self._blob is not None:
+            return self._blob.chunks
+        return 0

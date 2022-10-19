@@ -1,10 +1,7 @@
-from guillotina.exceptions import RequestNotFound
-from guillotina.interfaces import IInteraction
-from guillotina.utils import get_current_request
+from guillotina import task_vars
 
 
-class SecurityMap(object):
-
+class SecurityMap:
     def __init__(self):
         self._clear()
 
@@ -32,24 +29,13 @@ class SecurityMap(object):
         row[colentry] = value
         col[rowentry] = value
 
-        self._invalidated_interaction_cache()
+        self._invalidated_policy_cache()
 
         return True
 
-    def _invalidated_interaction_cache(self):
-        # Invalidate this threads interaction cache
-        try:
-            request = get_current_request()
-        except RequestNotFound:
-            return
-        interaction = IInteraction(request)
-        if interaction is not None:
-            try:
-                invalidate_cache = interaction.invalidate_cache
-            except AttributeError:
-                pass
-            else:
-                invalidate_cache()
+    def _invalidated_policy_cache(self):
+        policies = task_vars.security_policies.get() or {}
+        policies.clear()
 
     def del_cell(self, rowentry, colentry):
         row = self._byrow.get(rowentry)
@@ -62,7 +48,7 @@ class SecurityMap(object):
             if not col:
                 del self._bycol[colentry]
 
-            self._invalidated_interaction_cache()
+            self._invalidated_policy_cache()
 
             return True
 
@@ -79,7 +65,7 @@ class SecurityMap(object):
         marker = object()
         cell = self.queryCell(rowentry, colentry, marker)
         if cell is marker:
-            raise KeyError('Not a valid row and column pair.')
+            raise KeyError("Not a valid row and column pair.")
         return cell
 
     def get_row(self, rowentry):
@@ -105,7 +91,6 @@ class SecurityMap(object):
 
 
 class GuillotinaSecurityMap(SecurityMap):
-
     def __init__(self, context):
         self.context = context
         map = self.context.acl.get(self.key)
@@ -117,6 +102,13 @@ class GuillotinaSecurityMap(SecurityMap):
             self._bycol = map._bycol
         self.map = map
 
+    def _invalidated_policy_cache(self):
+        super()._invalidated_policy_cache()
+        try:
+            del self.context.__volatile__["security_cache"]
+        except KeyError:
+            pass
+
     def _changed(self):
         map = self.map
         if self.context.__acl__ is None:
@@ -126,7 +118,7 @@ class GuillotinaSecurityMap(SecurityMap):
             map._byrow = self._byrow
             map._bycol = self._bycol
             self.context.__acl__[self.key] = map
-        self.context._p_register()
+        self.context.register()
 
     def add_cell(self, rowentry, colentry, value):
         if super().add_cell(rowentry, colentry, value):

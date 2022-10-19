@@ -12,6 +12,8 @@
 #
 ##############################################################################
 # flake8: noqa
+from zope.interface.interface import InterfaceClass
+
 import unittest
 
 
@@ -19,51 +21,46 @@ def _makeSchema():
     from zope.interface import Interface
     from guillotina.schema import Bytes
 
-    class ISchemaTest(Interface):
-        title = Bytes(
-            title="Title",
-            description="Title",
-            default=b"",
-            required=True)
-        description = Bytes(
-            title="Description",
-            description="Description",
-            default=b"",
-            required=True)
-        spam = Bytes(
-            title="Spam",
-            description="Spam",
-            default=b"",
-            required=True)
-    return ISchemaTest
+    return InterfaceClass(
+        "ISchemaTest",
+        (Interface,),
+        {
+            "title": Bytes(title="Title", description="Title", default=b"", required=True),
+            "description": Bytes(title="Description", description="Description", default=b"", required=True),
+            "spam": Bytes(title="Spam", description="Spam", default=b"", required=True),
+        },
+        "",
+        "guillotina.schema.tests.test_schema",
+    )
 
 
 def _makeDerivedSchema(base=None):
     from guillotina.schema import Bytes
+
     if base is None:
         base = _makeSchema()
 
-    class ISchemaTestSubclass(base):
-        foo = Bytes(
-            title='Foo',
-            description='Fooness',
-            default=b"",
-            required=False)
-    return ISchemaTestSubclass
+    return InterfaceClass(
+        "ISchemaTestSubclass",
+        (base,),
+        {"foo": Bytes(title="Foo", description="Fooness", default=b"", required=False)},
+        "",
+        "guillotina.schema.tests.test_schema",
+    )
 
 
 class Test_get_fields(unittest.TestCase):
-
     def _callFUT(self, schema):
         from guillotina.schema import get_fields
+
         return get_fields(schema)
 
     def test_simple(self):
         fields = self._callFUT(_makeSchema())
 
-        self.assertTrue('title' in fields)
-        self.assertTrue('description' in fields)
-        self.assertTrue('spam' in fields)
+        self.assertTrue("title" in fields)
+        self.assertTrue("description" in fields)
+        self.assertTrue("spam" in fields)
 
         # test whether getName() has the right value
         for key, value in fields.items():
@@ -72,10 +69,10 @@ class Test_get_fields(unittest.TestCase):
     def test_derived(self):
         fields = self._callFUT(_makeDerivedSchema())
 
-        self.assertTrue('title' in fields)
-        self.assertTrue('description' in fields)
-        self.assertTrue('spam' in fields)
-        self.assertTrue('foo' in fields)
+        self.assertTrue("title" in fields)
+        self.assertTrue("description" in fields)
+        self.assertTrue("spam" in fields)
+        self.assertTrue("foo" in fields)
 
         # test whether getName() has the right value
         for key, value in fields.items():
@@ -83,67 +80,67 @@ class Test_get_fields(unittest.TestCase):
 
 
 class Test_get_fields_in_order(unittest.TestCase):
-
     def _callFUT(self, schema):
         from guillotina.schema import get_fields_in_order
+
         return get_fields_in_order(schema)
 
     def test_simple(self):
         fields = self._callFUT(_makeSchema())
         field_names = [name for name, field in fields]
-        self.assertEqual(field_names, ['title', 'description', 'spam'])
+        self.assertEqual(field_names, ["title", "description", "spam"])
         for key, value in fields:
             self.assertEqual(key, value.getName())
 
     def test_derived(self):
         fields = self._callFUT(_makeDerivedSchema())
         field_names = [name for name, field in fields]
-        self.assertEqual(field_names, ['title', 'description', 'spam', 'foo'])
+        self.assertEqual(field_names, ["title", "description", "spam", "foo"])
         for key, value in fields:
             self.assertEqual(key, value.getName())
 
 
 class Test_getFieldNames(unittest.TestCase):
-
     def _callFUT(self, schema):
         from guillotina.schema import getFieldNames
+
         return getFieldNames(schema)
 
     def test_simple(self):
         names = self._callFUT(_makeSchema())
         self.assertEqual(len(names), 3)
-        self.assertTrue('title' in names)
-        self.assertTrue('description' in names)
-        self.assertTrue('spam' in names)
+        self.assertTrue("title" in names)
+        self.assertTrue("description" in names)
+        self.assertTrue("spam" in names)
 
     def test_derived(self):
         names = self._callFUT(_makeDerivedSchema())
         self.assertEqual(len(names), 4)
-        self.assertTrue('title' in names)
-        self.assertTrue('description' in names)
-        self.assertTrue('spam' in names)
-        self.assertTrue('foo' in names)
+        self.assertTrue("title" in names)
+        self.assertTrue("description" in names)
+        self.assertTrue("spam" in names)
+        self.assertTrue("foo" in names)
 
 
 class Test_getFieldNamesInOrder(unittest.TestCase):
-
     def _callFUT(self, schema):
         from guillotina.schema import getFieldNamesInOrder
+
         return getFieldNamesInOrder(schema)
 
     def test_simple(self):
         names = self._callFUT(_makeSchema())
-        self.assertEqual(names, ['title', 'description', 'spam'])
+        self.assertEqual(names, ["title", "description", "spam"])
 
     def test_derived(self):
         names = self._callFUT(_makeDerivedSchema())
-        self.assertEqual(names, ['title', 'description', 'spam', 'foo'])
+        self.assertEqual(names, ["title", "description", "spam", "foo"])
 
 
 class Test_getValidationErrors(unittest.TestCase):
-
     def _callFUT(self, schema, object):
         from guillotina.schema import getValidationErrors
+
         return getValidationErrors(schema, object)
 
     def test_schema(self):
@@ -165,7 +162,7 @@ class Test_getValidationErrors(unittest.TestCase):
 
         errors = self._callFUT(IWithRequired, object())
         self.assertEqual(len(errors), 1)
-        self.assertEqual(errors[0][0], 'must')
+        self.assertEqual(errors[0][0], "must")
         self.assertEqual(errors[0][1].__class__, SchemaNotFullyImplemented)
 
     def test_schema_with_invariant_errors(self):
@@ -176,7 +173,7 @@ class Test_getValidationErrors(unittest.TestCase):
         class IWithFailingInvariant(Interface):
             @invariant
             def _epic_fail(obj):
-                raise Invalid('testing')
+                raise Invalid("testing")
 
         errors = self._callFUT(IWithFailingInvariant, object())
         self.assertEqual(len(errors), 1)
@@ -197,9 +194,9 @@ class Test_getValidationErrors(unittest.TestCase):
 
 
 class Test_getSchemaValidationErrors(unittest.TestCase):
-
     def _callFUT(self, schema, object):
         from guillotina.schema import getSchemaValidationErrors
+
         return getSchemaValidationErrors(schema, object)
 
     def test_schema_wo_fields(self):
@@ -209,7 +206,8 @@ class Test_getSchemaValidationErrors(unittest.TestCase):
         class INoFields(Interface):
             def method():
                 pass
-            attr = Attribute('ignoreme')
+
+            attr = Attribute("ignoreme")
 
         errors = self._callFUT(INoFields, object())
         self.assertEqual(len(errors), 0)
@@ -223,8 +221,8 @@ class Test_getSchemaValidationErrors(unittest.TestCase):
             bar = Text()
 
         class Obj(object):
-            foo = 'Foo'
-            bar = 'Bar'
+            foo = "Foo"
+            bar = "Bar"
 
         errors = self._callFUT(IWithFields, Obj())
         self.assertEqual(len(errors), 0)
@@ -239,7 +237,7 @@ class Test_getSchemaValidationErrors(unittest.TestCase):
 
         errors = self._callFUT(IWithRequired, object())
         self.assertEqual(len(errors), 1)
-        self.assertEqual(errors[0][0], 'must')
+        self.assertEqual(errors[0][0], "must")
         self.assertEqual(errors[0][1].__class__, SchemaNotFullyImplemented)
 
     def test_schema_with_invalid_field(self):
@@ -255,16 +253,18 @@ class Test_getSchemaValidationErrors(unittest.TestCase):
 
         errors = self._callFUT(IWithMinium, Obj())
         self.assertEqual(len(errors), 1)
-        self.assertEqual(errors[0][0], 'value')
+        self.assertEqual(errors[0][0], "value")
         self.assertEqual(errors[0][1].__class__, TooSmall)
 
 
 def test_suite():
-    return unittest.TestSuite((
-        unittest.makeSuite(Test_get_fields),
-        unittest.makeSuite(Test_get_fields_in_order),
-        unittest.makeSuite(Test_getFieldNames),
-        unittest.makeSuite(Test_getFieldNamesInOrder),
-        unittest.makeSuite(Test_getValidationErrors),
-        unittest.makeSuite(Test_getSchemaValidationErrors),
-    ))
+    return unittest.TestSuite(
+        (
+            unittest.makeSuite(Test_get_fields),
+            unittest.makeSuite(Test_get_fields_in_order),
+            unittest.makeSuite(Test_getFieldNames),
+            unittest.makeSuite(Test_getFieldNamesInOrder),
+            unittest.makeSuite(Test_getValidationErrors),
+            unittest.makeSuite(Test_getSchemaValidationErrors),
+        )
+    )

@@ -1,8 +1,9 @@
-from guillotina.component import get_adapter
+from collections import OrderedDict
+from guillotina import app_settings
+from guillotina import task_vars
 from guillotina.db.cache.dummy import DummyCache
 from guillotina.db.interfaces import IStorage
 from guillotina.db.interfaces import ITransaction
-from guillotina.db.interfaces import ITransactionStrategy
 from guillotina.db.interfaces import IWriter
 from zope.interface import implementer
 
@@ -11,9 +12,9 @@ import uuid
 
 
 class MockDBTransaction:
-    '''
+    """
     a db transaction is different than a transaction from guillotina
-    '''
+    """
 
     def __init__(self, storage, trns):
         self._storage = storage
@@ -21,21 +22,21 @@ class MockDBTransaction:
 
 
 @implementer(ITransaction)
-class MockTransaction:
+class MockTransaction:  # type: ignore
     def __init__(self, manager=None):
         if manager is None:
             manager = MockTransactionManager()
-        self._manager = manager
+        self._manager = self.manager = manager
         self._tid = 1
-        self.modified = {}
+        self.modified = OrderedDict()
+        self.added = OrderedDict()
+        self.deleted = OrderedDict()
         self.request = None
-        self._strategy = get_adapter(
-            self, ITransactionStrategy,
-            name=manager._storage._transaction_strategy)
         self._cache = DummyCache(self)
         self._lock = asyncio.Lock()
-        self._status = 'started'
+        self._status = "started"
         self._db_conn = None
+        self.storage = MockStorage()
 
     async def get_connection(self):
         return self._db_conn
@@ -43,41 +44,55 @@ class MockTransaction:
     async def refresh(self, ob):
         return ob
 
-    def register(self, ob):
-        self.modified[ob._p_oid] = ob
+    def register(self, ob, new_oid=None):
+        oid = new_oid or ob.__uuid__
+        if oid is None:
+            oid = app_settings["uid_generator"](ob)
+        ob.__uuid__ = oid
+        if ob.__new_marker__:
+            self.added[oid] = ob
+        else:
+            self.modified[oid] = ob
 
-    def tpc_cleanup(self):
+    def delete(self, ob):
+        self.deleted[ob.__uuid__] = ob
+
+    def tpc_cleanup(self):  # pragma: no cover
         pass
 
-    async def del_blob(self, bid):
+    async def del_blob(self, bid):  # pragma: no cover
         pass
 
-    async def write_blob_chunk(self, bid, zoid, chunk_number, data):
+    async def write_blob_chunk(self, bid, zoid, chunk_number, data):  # pragma: no cover
         pass
 
-    async def get_annotation(self, ob, key):
+    async def get_annotation(self, ob, key, reader=None):  # pragma: no cover
         pass
+
+    def __enter__(self):
+        task_vars.txn.set(self)
+        return self
+
+    def __exit__(self, *args):
+        """"""
 
 
 @implementer(IStorage)
-class MockStorage:
+class MockStorage:  # type: ignore
 
     _cache: dict = {}
     _read_only = False
-    _transaction_strategy = 'resolve'
-    _cache_strategy = 'dummy'
     _options: dict = {}
     supports_unique_constraints = False
 
-    def __init__(self, transaction_strategy='resolve', cache_strategy='dummy'):
-        self._transaction_strategy = transaction_strategy
-        self._cache_strategy = cache_strategy
+    def __init__(self):
         self._transaction = None
         self._objects = {}
         self._parent_objs = {}
         self._hits = 0
         self._misses = 0
         self._stored = 0
+        self._objects_table_name = "objects"
 
     async def get_annotation(self, trns, oid, id):
         return None
@@ -98,51 +113,60 @@ class MockStorage:
     async def load(self, txn, oid):
         return self._objects[oid]
 
-    async def get_child(self, txn, container_p_oid, key):
-        if container_p_oid not in self._objects:
+    async def get_child(self, txn, container_uid, key):
+        if container_uid not in self._objects:
             return
-        children = self._objects[container_p_oid]['children']
+        children = self._objects[container_uid]["children"]
         if key in children:
             oid = children[key]
             if oid in self._objects:
                 return self._objects[oid]
 
-    def store(self, ob):
+    def store(self, oid, old_serial, writer, ob, txn):
         writer = IWriter(ob)
-        self._objects[ob._p_oid] = {
-            'state': writer.serialize(),
-            'zoid': ob._p_oid,
-            'tid': 1,
-            'id': writer.id,
-            'children': self._objects.get(ob._p_oid, {}).get('children', {})
+        self._objects[ob.__uuid__] = {
+            "state": writer.serialize(),
+            "zoid": ob.__uuid__,
+            "tid": 1,
+            "id": writer.id,
+            "children": self._objects.get(ob.__uuid__, {}).get("children", {}),
         }
-        if ob.__parent__ and ob.__parent__._p_oid in self._objects:
-            self._objects[ob.__parent__._p_oid]['children'][ob.id] = ob._p_oid
+        if ob.__parent__ and ob.__parent__.__uuid__ in self._objects:
+            self._objects[ob.__parent__.__uuid__]["children"][ob.id] = ob.__uuid__
 
 
-class MockTransactionManager:
+class MockTransactionManager:  # type: ignore
     _storage = None
-    db_id = 'root'
+    db_id = "root"
 
     def __init__(self, storage=None):
         if storage is None:
             storage = MockStorage()
         self._storage = storage
         self._hard_cache = {}
+        self._cache_hits = 0
+        self._cache_misses = 0
+        self._cache_stored = 0
 
     async def _close_txn(self, *args, **kwargs):
         pass
 
-    def get(self, request):
-        return request._txn
+    def get(self):
+        return task_vars.tm.get()
 
-    async def begin(self, request):
-        request._txn = MockTransaction(self)
-        return request._txn
+    async def begin(self):
+        txn = MockTransaction(self)
+        task_vars.txn.set(txn)
+        return txn
+
+    def __enter__(self):
+        task_vars.tm.set(self)
+
+    def __exit__(self, *args):
+        """"""
 
 
 class FakeConnection:
-
     def __init__(self):
         self.containments = {}
         self.refs = {}
@@ -153,8 +177,7 @@ class FakeConnection:
         return key in [self.refs[oid].id for oid in oids]
 
     def register(self, ob):
-        ob._p_jar = self
-        ob._p_oid = uuid.uuid4().hex
-        self.refs[ob._p_oid] = ob
-        self.containments[ob._p_oid] = []
-    _p_register = register
+        ob.__txn__ = self
+        ob.__uuid__ = uuid.uuid4().hex
+        self.refs[ob.__uuid__] = ob
+        self.containments[ob.__uuid__] = []

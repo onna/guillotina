@@ -1,18 +1,19 @@
-from datetime import datetime
 from dateutil.tz import tzutc
-from guillotina import configure
 from guillotina import logger
-from guillotina.browser import View
+from guillotina import task_vars
 from guillotina.db.transaction import Status
 from guillotina.exceptions import ServerClosingException
-from guillotina.interfaces import IAsyncJobPool
+from guillotina.exceptions import TransactionNotFound
+from guillotina.interfaces import IAsyncJobPool  # noqa
 from guillotina.interfaces import IAsyncUtility  # noqa
-from guillotina.interfaces import IQueueUtility
+from guillotina.interfaces import IQueueUtility  # noqa
 from guillotina.transactions import get_tm
 from guillotina.transactions import get_transaction
-from guillotina.transactions import managed_transaction
+from guillotina.transactions import transaction
+from guillotina.utils import dump_task_vars
+from guillotina.utils import execute
+from guillotina.utils import load_task_vars
 
-import aiotask_context
 import asyncio
 import typing
 
@@ -20,9 +21,7 @@ import typing
 _zone = tzutc()
 
 
-@configure.utility(provides=IQueueUtility)
 class QueueUtility(object):
-
     def __init__(self, settings=None, loop=None):
         self._queue = None
         self._loop = loop
@@ -41,49 +40,47 @@ class QueueUtility(object):
         while True:
             got_obj = False
             try:
-                view = await self.queue.get()
+                func, tvars = await self.queue.get()
                 got_obj = True
-                txn = get_transaction(view.request)
-                tm = get_tm(view.request)
-                if txn is None or (txn.status in (
-                        Status.ABORTED, Status.COMMITTED, Status.CONFLICT) and
-                        txn._db_conn is None):
-                    txn = await tm.begin(view.request)
+                load_task_vars(tvars)
+                txn = get_transaction()
+                tm = get_tm()
+                if txn is None or (
+                    txn.status in (Status.ABORTED, Status.COMMITTED, Status.CONFLICT) and txn._db_conn is None
+                ):
+                    txn = await tm.begin()
                 else:
                     # still finishing current transaction, this connection
                     # will be cut off, so we need to wait until we no longer
                     # have an active transaction on the reqeust...
-                    await self.add(view)
-                    await asyncio.sleep(1)
+                    await self.queue.put((func, tvars))
+                    await asyncio.sleep(0.1)
                     continue
 
                 try:
-                    aiotask_context.set('request', view.request)
-                    await view()
+                    await func()
                     await tm.commit(txn=txn)
                 except Exception as e:
-                    logger.error(
-                        "Exception on writing execution",
-                        exc_info=e)
+                    logger.error("Exception on writing execution", exc_info=e)
                     await tm.abort(txn=txn)
-            except (RuntimeError, SystemExit, GeneratorExit, KeyboardInterrupt,
-                    asyncio.CancelledError, KeyboardInterrupt):
+            except (
+                RuntimeError,
+                SystemExit,
+                GeneratorExit,
+                KeyboardInterrupt,
+                asyncio.CancelledError,
+                KeyboardInterrupt,
+            ):
                 # dive, these errors mean we're exit(ing)
                 self._exceptions = True
                 return
             except Exception as e:  # noqa
                 self._exceptions = True
-                logger.error('Worker call failed', exc_info=e)
+                logger.error("Worker call failed", exc_info=e)
+                execute.clear_futures()
             finally:
-                try:
-                    aiotask_context.set('request', None)
-                except (RuntimeError, ValueError):
-                    pass
                 if got_obj:
-                    try:
-                        view.request.execute_futures()
-                    except AttributeError:
-                        pass
+                    execute.execute_futures()
                     self.queue.task_done()
 
     @property
@@ -95,7 +92,7 @@ class QueueUtility(object):
         return self._total_queued
 
     async def add(self, view):
-        await self.queue.put(view)
+        await self.queue.put((view, dump_task_vars()))
         self._total_queued += 1
         return self.queue.qsize()
 
@@ -103,24 +100,12 @@ class QueueUtility(object):
         pass
 
 
-class QueueObject(View):
-
-    def __init__(self, context, request):
-        # not sure if we need proxy object here...
-        # super(QueueObject, self).__init__(context, TransactionProxy(request))
-        super(QueueObject, self).__init__(context, request)
-        self.time = datetime.now(tz=_zone).timestamp()
-
-    def __lt__(self, view):
-        return self.time < view.time
-
-
 class Job:
-
-    def __init__(self, func: typing.Callable[[], typing.Coroutine],
-                 request=None, args=None, kwargs=None) -> None:
+    def __init__(
+        self, func: typing.Callable[[], typing.Coroutine], _task_vars=None, args=None, kwargs=None
+    ) -> None:
         self._func = func
-        self._request = request
+        self._task_vars = _task_vars
         self._args = args
         self._kwargs = kwargs
 
@@ -129,28 +114,24 @@ class Job:
         return self._func
 
     async def run(self):
-        try:
-            if self._request is not None:
-                aiotask_context.set('request', self._request)
-                async with managed_transaction(
-                        request=self._request, abort_when_done=False):
-                    await self._func(*self._args or [], **self._kwargs or {})
-                self._request.execute_futures()
-            else:
-                # if no request, we do it without transaction
+        if self._task_vars is not None:
+            load_task_vars(self._task_vars)
+        tm = task_vars.tm.get()
+        if tm is not None:
+            async with transaction(tm=tm):
                 await self._func(*self._args or [], **self._kwargs or {})
-        finally:
-            aiotask_context.set('request', None)
+        else:
+            # if no request, we do it without transaction
+            await self._func(*self._args or [], **self._kwargs or {})
 
 
-@configure.utility(provides=IAsyncJobPool)
 class AsyncJobPool:
-
-    def __init__(self, max_size=5):
+    def __init__(self, settings=None, loop=None):
+        settings = settings or {"max_size": 5}
         self._loop = None
         self._running = []
         self._pending = []
-        self._max_size = max_size
+        self._max_size = settings["max_size"]
         self._closing = False
 
     def get_loop(self):
@@ -172,38 +153,34 @@ class AsyncJobPool:
     async def finalize(self):
         await self.join()
 
-    def add_job(self, func: typing.Callable[[], typing.Coroutine],
-                request=None, args=None, kwargs=None):
+    def add_job(self, func: typing.Callable[[], typing.Coroutine], args=None, kwargs=None):
         if self._closing:
-            raise ServerClosingException('Can not schedule job')
-        job = Job(func, request=request, args=args, kwargs=kwargs)
+            raise ServerClosingException("Can not schedule job")
+        job = Job(func, _task_vars=dump_task_vars(), args=args, kwargs=kwargs)
         self._pending.insert(0, job)
         self._schedule()
         return job
 
-    def _add_job_after_commit(self, status, func, request=None, args=None, kwargs=None):
-        self.add_job(func, request=request, args=args, kwargs=kwargs)
+    def _add_job_after_commit(self, status, func, args=None, kwargs=None):
+        self.add_job(func, args=args, kwargs=kwargs)
 
-    def add_job_after_commit(self, func: typing.Callable[[], typing.Coroutine],
-                             request=None, args=None, kwargs=None):
-        txn = get_transaction(request)
-        txn.add_after_commit_hook(
-            self._add_job_after_commit,
-            args=[func],
-            kws={
-                'request': request,
-                'args': args,
-                'kwargs': kwargs
-            })
+    def add_job_after_commit(self, func: typing.Callable[[], typing.Coroutine], args=None, kwargs=None):
+        txn = get_transaction()
+        if txn is not None:
+            txn.add_after_commit_hook(
+                self._add_job_after_commit, args=[func], kws={"args": args, "kwargs": kwargs}
+            )
+        else:
+            raise TransactionNotFound("Could not find transaction to run job with")
 
     def _done_callback(self, task):
         self._running.remove(task)
         self._schedule()  # see if we can schedule now
 
     def _schedule(self):
-        '''
+        """
         check if we can schedule a new job
-        '''
+        """
         if len(self._running) < self._max_size and len(self._pending) > 0:
             job = self._pending.pop()
             task = self.get_loop().create_task(job.run())

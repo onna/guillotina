@@ -1,24 +1,18 @@
+from guillotina import task_vars
+from guillotina import utils
 from guillotina._settings import app_settings
 from guillotina.commands import Command
 from guillotina.component import get_utility
 from guillotina.interfaces import IApplication
 from guillotina.testing import TESTING_SETTINGS
+from guillotina.tests.utils import get_mocked_request
+from guillotina.tests.utils import login
 
-import aioconsole
-import asyncio
-
-
-class Console(aioconsole.code.AsynchronousConsole):
-    async def interact(self, banner=None, stop=True, handle_sigint=True):
-        """
-        We are now running in loop so we can do async stuff with guillotina
-        app and database...
-        """
-        return await super().interact(banner, stop, handle_sigint)
+import asyncio  # noqa
+import sys
 
 
 class ShellHelpers:
-
     def __init__(self, app, root, request):
         self._app = app
         self._root = root
@@ -29,86 +23,54 @@ class ShellHelpers:
         self._active_tm = None
 
     async def use_db(self, db_id):
-        db = self._root[db_id]
+        db = await utils.get_database(db_id)
         tm = self._active_tm = db.get_transaction_manager()
-        self._request._db_id = db_id
         self._active_db = db
         self._active_txn = await tm.begin()
-        self._request._txn = self._active_txn
-        self._request._tm = tm
+        self.setup_context()
         return self._active_txn
 
     async def use_container(self, container_id):
-        container = await self._active_db.async_get(container_id)
-        if container is None:
-            raise Exception('Container not found')
-        self._request.container = container
-        self._request._container_id = container.id
+        with self._active_txn, self._active_tm:
+            container = await self._active_db.async_get(container_id)
+            if container is None:
+                raise Exception("Container not found")
         self._active_container = container
+        self.setup_context()
         return container
 
     async def commit(self):
         if self._active_tm is None:
-            raise Exception('No active transaction manager')
+            raise Exception("No active transaction manager")
         await self._active_tm.commit(txn=self._active_txn)
         self._request.execute_futures()
         self._active_txn = await self._active_tm.begin()
+        self.setup_context()
         return self._active_txn
 
     async def abort(self):
         if self._active_tm is None:
-            raise Exception('No active transaction manager')
+            raise Exception("No active transaction manager")
         await self._active_tm.abort(txn=self._active_txn)
         self._active_txn = await self._active_tm.begin()
+        self.setup_context()
         return self._active_txn
 
-
-class InteractiveEventLoop(asyncio.SelectorEventLoop):  # type: ignore
-    """Event loop running a python console."""
-
-    console_class = Console
-
-    def __init__(self, banner='', request=None):
-        self.banner = banner
-        self.console = None
-        self.console_task = None
-        self.console_server = None
-        self.request = request
-        super().__init__(selector=None)
-
-    def setup(self, app):
-        '''
-        need to manually run this after app is initialized and we have
-        locals that matter to us...
-        '''
-        app_settings['root_user']['password'] = TESTING_SETTINGS['root_user']['password']
-        root = get_utility(IApplication, name='root')
-        helpers = ShellHelpers(app, root, self.request)
-        _locals = {
-            'app': app,
-            'root': root,
-            'app_settings': app_settings,
-            'request': self.request,
-            'helpers': helpers,
-            'use_db': helpers.use_db,
-            'use_container': helpers.use_container,
-            'commit': helpers.commit,
-            'abort': helpers.abort
-        }
-        self.console = self.console_class(None, locals=_locals, loop=self)
-        coro = self.console.interact(self.banner, stop=True, handle_sigint=True)
-        self.console_task = asyncio.async(coro, loop=self)
-
-    def close(self):
-        if self.console_task and not self.is_running():
-            asyncio.Future.cancel(self.console_task)
-        super().close()
+    def setup_context(self):
+        if self._active_db:
+            task_vars.db.set(self._active_db)
+            task_vars.tm.set(self._active_db.get_transaction_manager())
+        if self._active_txn:
+            task_vars.txn.set(self._active_txn)
+        if self._active_container:
+            task_vars.registry.set(None)
+            task_vars.container.set(self._active_container)
 
 
 class ShellCommand(Command):
-    description = 'Guillotina server shell'
+    description = "Guillotina server shell"
     loop = None
-    banner = '''
+    banner = """
 guillotina interactive shell
 ==============================
 
@@ -123,44 +85,69 @@ Available local variables:
     - use_container
     - commit
     - abort
+    - utils
+    - setup
 
 Example
 -------
 
 txn = await use_db('db')
 container = await use_container('container')
+setup()
 item = await container.async_get('item')
 
 
 Commit changes
 --------------
 
-If you need to commit changes to db...
-
-
-tm = root['db'].get_transaction_manager()
-txn = await tm.begin()
-// do changes...
-await tm.commit(txn=txn)
-
-Or, using the helper utilities...
-
-txn = await use_db('db')
-container = await use_container('container')
 await commit()
 
-'''
+Or, abort
+---------
 
-    def get_loop(self):
-        if self.loop is None:
-            self.loop = InteractiveEventLoop(self.banner, self.request)
-            asyncio.set_event_loop(self.loop)
-        return self.loop
+await abort()
+
+
+Configured databases
+--------------------
+
+{}
+
+"""
+
+    async def get_banner(self):
+        db_ids = []
+        async for db in utils.iter_databases():
+            db_ids.append("- " + db.id)
+
+        return self.banner.format("\n".join(db_ids))
 
     def run(self, arguments, settings, app):
-        loop = self.get_loop()
-        loop.setup(app)
+        app_settings["root_user"]["password"] = TESTING_SETTINGS["root_user"]["password"]
+        root = get_utility(IApplication, name="root")
+        request = get_mocked_request()
+        login()
+        helpers = ShellHelpers(app, root, request)
+        task_vars.request.set(request)
+        use_db = helpers.use_db  # noqa
+        use_container = helpers.use_container  # noqa
+        commit = helpers.commit  # noqa
+        abort = helpers.abort  # noqa
+        setup = helpers.setup_context  # noqa
+
         try:
-            loop.run_forever()
-        except KeyboardInterrupt:
-            pass
+            from IPython.terminal.embed import InteractiveShellEmbed  # type: ignore
+            from traitlets.config.loader import Config  # type: ignore
+        except ImportError:
+            sys.stderr.write(
+                "You must install ipython for the "
+                "shell command to work.\n"
+                "Use `pip install ipython` to install ipython.\n"
+            )
+            return 1
+
+        cfg = Config()
+        loop = self.get_loop()
+        banner = loop.run_until_complete(self.get_banner())
+        ipshell = InteractiveShellEmbed(config=cfg, banner1=banner)
+        ipshell()

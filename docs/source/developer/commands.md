@@ -11,6 +11,8 @@ You can provide your own CLI commands for guillotina through a simple interface.
 * `initialize-db`: databases are automatically initialized; however, you can use this command to manually do it
 * `testdata`: populate the database with test data from wikipedia
 * `run`: run a python script. The file must have a function `async def run(container):`
+* `gen-key`: generate cryptographic key for jwt, jwk
+* `dbvacuum`: run optimized vacuuming process to clean up deleted objects
 
 
 ## Command Options
@@ -23,6 +25,7 @@ You can provide your own CLI commands for guillotina through a simple interface.
   - `--line-profiler`: use line_profiler `requires line_profiler`
   - `--line-profiler-matcher`: fnmatch of module/function to profile `requires line_profiler`
   - `--line-profiler-output`: to store output in a file `requires line_profiler`
+  - `--override`: Override configuration values, Example: `--override="root_user.password=foobar"`
 - serve:
   - `--host`: host to bind to
   - `--port`: port to bind to
@@ -84,3 +87,20 @@ app_settings = {
     }
 }
 ```
+
+
+## Overridding configuration
+
+First off, you can use the `--override` setting for all commands to provide
+setting overrides in files. For example, `--override="root_user.password=foobar"`.
+
+Additionally, you can override configuration with environment variables. To override
+the root password like above, you would do: `G_root_user__password=foobar`.
+
+You can also override json data structures as well:
+
+```bash
+export G_cors__allow_origin='["http://localhost:8080"]'
+```
+
+Use the double underscore(`__`) to designate nested json structure to assign values.

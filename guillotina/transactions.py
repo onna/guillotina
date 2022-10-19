@@ -1,94 +1,124 @@
-from guillotina.exceptions import RequestNotFound
-from guillotina.utils import get_current_request
+from guillotina import task_vars
+from guillotina.db.interfaces import ITransaction
+from guillotina.db.interfaces import ITransactionManager
 
 import logging
+import typing
 
 
-logger = logging.getLogger('guillotina')
+logger = logging.getLogger("guillotina")
 
 
-def _safe_get_request(request):
-    if request is None:
-        try:
-            request = get_current_request()
-        except RequestNotFound:
-            pass
-    return request
+async def commit(*, txn: typing.Optional[ITransaction] = None, warn=True) -> None:
+    """
+    Commit the current active transaction.
 
-
-async def commit(request=None, warn=True):
+    :param txn: transaction to commit
+    """
+    tm = None
     try:
-        request = _safe_get_request(request)
-        await get_tm(request).commit(request)
-    except AttributeError as e:
+        tm = get_tm()
+    except AttributeError:
         if warn:
-            logger.warning('Could not locate transaction manager to commit', exc_info=True)
+            logger.warning("Could not locate transaction manager to commit", exc_info=True)
+
+    if tm is not None:
+        await tm.commit(txn=txn)
 
 
-async def abort(request=None):
+async def abort(*, txn: typing.Optional[ITransaction] = None) -> None:
+    """
+    Abort the current active transaction.
+
+    :param txn: transaction to abort
+    """
+    tm = None
     try:
-        tm = get_tm(request)
-        await tm.abort(request)
+        tm = get_tm()
     except AttributeError:
         # not part of transaction, ignore
         pass
-        # logger.warning('Could not locate transaction manager to abort', exc_info=True)
+    if tm is not None:
+        await tm.abort(txn=txn)
 
 
-def get_tm(request=None):
+def get_tm() -> typing.Optional[ITransactionManager]:
     """Return shared transaction manager (from request)
 
     This is used together with "with" syntax for wrapping mutating
     code into a request owned transaction.
 
-    :param request: request owning the transaction
-
     Example::
 
-        with get_tm(request) as txn:  # begin transaction txn
+        with get_tm().transaction() as txn:  # begin transaction txn
 
             # do something
 
         # transaction txn commits or raises ConflictError
 
     """
-    return _safe_get_request(request)._tm
+    return task_vars.tm.get()
 
 
-def get_transaction(request=None):
-    req = _safe_get_request(request)
-    return req._tm.get(req)
+def get_transaction() -> typing.Optional[ITransaction]:
+    """
+    Return the current active transaction.
+    """
+    return task_vars.txn.get()
 
 
-class managed_transaction:  # noqa: N801
-    def __init__(self, request=None, tm=None, write=False, abort_when_done=False,
-                 adopt_parent_txn=False):
-        self.request = _safe_get_request(request)
-        if tm is None:
-            tm = request._tm
-        self.tm = tm
-        self.write = write
+class transaction:  # noqa: N801
+    """
+    Execute a transaction as async context manager and
+    automatically close connection after done.
+
+    >>> async with transaction() as txn:
+    >>>   pass
+
+    :param db: db to operate transaction on
+    :param tm: transaction manager to retrieve transaction from
+    :param abort_when_done: Abort transaction when done (defaults to false)
+    :param adopt_parent_txn: If this is a sub-transaction, use parent's registered objects
+    :param execute_futures: Execute registered futures with transaction after done (defaults to true)
+    :param read_only: Is this a read_only txn? (default to false)
+    """
+
+    def __init__(
+        self,
+        *,
+        db=None,
+        tm=None,
+        abort_when_done=False,
+        adopt_parent_txn=False,
+        execute_futures=True,
+        read_only=False,
+    ):
+        if db is not None and tm is None:
+            tm = db.get_transaction_manager()
+        self.tm = tm or get_tm()
         self.abort_when_done = abort_when_done
-        self.previous_txn = self.txn = self.previous_write_setting = None
+        self.previous_tm = self.previous_txn = self.txn = None
         self.adopt_parent_txn = adopt_parent_txn
+        self.execute_futures = execute_futures
         self.adopted = []
+        self.read_only = read_only
 
     async def __aenter__(self):
-        if self.request is not None and hasattr(self.request, '_txn'):
-            self.previous_txn = self.request._txn
-            self.previous_write_setting = getattr(self.request, '_db_write_enabled', False)
-            if self.write:
-                self.request._db_write_enabled = True
-        self.txn = await self.tm.begin(request=self.request)
+        txn = get_transaction()
+        if txn is not None:
+            self.previous_txn = txn
+        tm = get_tm()
+        if tm is not None:
+            self.previous_tm = tm
+
+        self.txn = await self.tm.begin(read_only=self.read_only)
+        # these should be restored after
+        task_vars.tm.set(self.tm)
+        task_vars.txn.set(self.txn)
         return self.txn
 
-    def adopt_objects(self, obs, txn):
-        for oid, ob in obs.items():
-            self.adopted.append(ob)
-            ob._p_jar = txn
-
     async def __aexit__(self, exc_type, exc, tb):
-        if self.adopt_parent_txn:
+        if self.adopt_parent_txn and self.previous_txn is not None:
             # take on parent's modified, added, deleted objects if necessary
             # before we commit or abort this transaction.
             # this is necessary because inside this block, the outer transaction
@@ -97,20 +127,16 @@ class managed_transaction:  # noqa: N801
             # where, we we're adopted those objects with this transaction
             if self.previous_txn != self.txn:
                 # try adopting currently registered objects
-                self.txn.modified = self.previous_txn.modified
-                self.txn.deleted = self.previous_txn.deleted
-                self.txn.added = self.previous_txn.added
-
-                self.adopt_objects(self.txn.modified, self.txn)
-                self.adopt_objects(self.txn.deleted, self.txn)
-                self.adopt_objects(self.txn.added, self.txn)
+                self.txn.modified = {**self.previous_txn.modified, **self.txn.modified}
+                self.txn.deleted = {**self.previous_txn.deleted, **self.txn.deleted}
+                self.txn.added = {**self.previous_txn.added, **self.txn.added}
 
         if self.abort_when_done:
             await self.tm.abort(txn=self.txn)
         else:
             await self.tm.commit(txn=self.txn)
 
-        if self.adopt_parent_txn:
+        if self.adopt_parent_txn and self.previous_txn is not None:
             # restore transaction ownership of item from adoption done above
             if self.previous_txn != self.txn:
                 # we adopted previously detetected transaction so now
@@ -119,15 +145,15 @@ class managed_transaction:  # noqa: N801
                 self.previous_txn.deleted = {}
                 self.previous_txn.added = {}
 
-                for ob in self.adopted:
-                    ob._p_jar = self.previous_txn
+        if self.execute_futures:
+            from guillotina.utils import execute
 
-        if self.request is not None:
-            if self.previous_txn is not None:
-                # we do not want to overwrite _txn if is it None since we can
-                # reuse transaction objects and we don't want to screw up
-                # stale objects that reference dangling transactions with no
-                # db connection
-                self.request._txn = self.previous_txn
-            if self.previous_write_setting is not None:
-                self.request._db_write_enabled = self.previous_write_setting
+            execute.execute_futures()
+
+        if self.previous_txn is not None:
+            task_vars.txn.set(self.previous_txn)
+        if self.previous_tm is not None:
+            task_vars.tm.set(self.previous_tm)
+
+
+managed_transaction = transaction  # noqa

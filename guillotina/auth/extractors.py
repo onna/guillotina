@@ -1,15 +1,17 @@
-from guillotina import jose
-from guillotina._settings import app_settings
+from guillotina.utils import get_jwk_key
+from jwcrypto import jwe
 
 import base64
+import json
 import logging
+import time
 
 
-logger = logging.getLogger('guillotina')
+logger = logging.getLogger("guillotina")
 
 
 class BasePolicy:
-    name = '<FILL IN>'
+    name = "<FILL IN>"
 
     def __init__(self, request):
         self.request = request
@@ -24,60 +26,70 @@ class BasePolicy:
 
 
 class BearerAuthPolicy(BasePolicy):
-    name = 'bearer'
+    name = "bearer"
 
     async def extract_token(self):
-        header_auth = self.request.headers.get('AUTHORIZATION')
+        header_auth = self.request.headers.get("AUTHORIZATION")
         if header_auth is not None:
-            schema, _, encoded_token = header_auth.partition(' ')
-            if schema.lower() == 'bearer':
-                return {
-                    'type': 'bearer',
-                    'token': encoded_token.strip()
-                }
+            schema, _, encoded_token = header_auth.partition(" ")
+            if schema.lower() == "bearer":
+                return {"type": "bearer", "token": encoded_token.strip()}
 
 
 class WSTokenAuthPolicy(BasePolicy):
-    name = 'wstoken'
+    name = "wstoken"
 
     async def extract_token(self):
         request = self.request
-        if 'ws_token' in request.query:
-            jwt_token = request.query['ws_token'].encode('utf-8')
+        if "ws_token" in request.query:
+            jwt_token = request.query["ws_token"].encode("utf-8")
             try:
-                jwt = jose.decrypt(
-                    jose.deserialize_compact(jwt_token), app_settings['rsa']['priv'])
-            except jose.Expired:
-                # expired token
-                logger.warn(f'Expired token {jwt_token}', exc_info=True)
+                jwetoken = jwe.JWE()
+                jwetoken.deserialize(jwt_token.decode("utf-8"))
+                jwetoken.decrypt(get_jwk_key())
+                payload = jwetoken.payload
+            except jwe.InvalidJWEOperation:
+                logger.warn(f"Invalid operation", exc_info=True)
                 return
-            except jose.Error:
-                logger.warn(f'Error decrypting JWT token', exc_info=True)
+            except jwe.InvalidJWEData:
+                logger.warn(f"Error decrypting JWT token", exc_info=True)
                 return
-            data = {
-                'type': 'wstoken',
-                'token': jwt.claims['token']
-            }
-            if 'id' in jwt.claims:
-                data['id'] = jwt.claims['id']
+            json_payload = json.loads(payload)
+            if json_payload["exp"] <= int(time.time()):
+                logger.warning(f"Expired token {jwt_token}", exc_info=True)
+                return
+            data = {"type": "wstoken", "token": json_payload["token"]}
+            if "id" in json_payload:
+                data["id"] = json_payload["id"]
             return data
 
 
 class BasicAuthPolicy(BasePolicy):
-    name = 'basic'
+    name = "basic"
 
     async def extract_token(self, value=None):
         if value is None:
-            header_auth = self.request.headers.get('AUTHORIZATION')
+            header_auth = self.request.headers.get("AUTHORIZATION")
         else:
             header_auth = value
         if header_auth is not None:
-            schema, _, encoded_token = header_auth.partition(' ')
-            if schema.lower() == 'basic':
-                token = base64.b64decode(encoded_token).decode('utf-8')
-                userid, _, password = token.partition(':')
-                return {
-                    'type': 'basic',
-                    'id': userid.strip(),
-                    'token': password.strip()
-                }
+            schema, _, encoded_token = header_auth.partition(" ")
+            if schema.lower() == "basic":
+                try:
+                    token = base64.b64decode(encoded_token).decode("utf-8")
+                except Exception:  # pragma: no cover
+                    # could be unicode, could be binascii generic,
+                    # should just be ignored if we can't decode
+                    return
+                userid, _, password = token.partition(":")
+                return {"type": "basic", "id": userid.strip(), "token": password.strip()}
+
+
+class CookiePolicy(BasePolicy):
+    name = "cookie"
+
+    async def extract_token(self, value=None):
+        if value is None:
+            token = self.request.cookies.get("auth_token")
+            if token is not None:
+                return {"type": "cookie", "token": token.strip()}

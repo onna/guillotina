@@ -1,29 +1,81 @@
 from collections import OrderedDict
+from guillotina import task_vars
 from guillotina._settings import app_settings
-from guillotina.component import get_adapter
-from guillotina.db.interfaces import IStorageCache
+from guillotina.component import query_adapter
+from guillotina.const import ROOT_ID
+from guillotina.content import Container
+from guillotina.db.db import Root
 from guillotina.db.interfaces import ITransaction
-from guillotina.db.interfaces import ITransactionStrategy
+from guillotina.db.interfaces import ITransactionCache
 from guillotina.db.interfaces import IWriter
-from guillotina.db.reader import reader
+from guillotina.db.orm.interfaces import IBaseObject
 from guillotina.exceptions import ConflictError
 from guillotina.exceptions import ReadOnlyError
-from guillotina.exceptions import RequestNotFound
 from guillotina.exceptions import RestartCommit
 from guillotina.exceptions import TIDConflictError
-from guillotina.exceptions import Unauthorized
+from guillotina.exceptions import TransactionClosedException
+from guillotina.exceptions import TransactionObjectRegistrationMismatchException
 from guillotina.profile import profilable
-from guillotina.utils import get_current_request
+from guillotina.registry import Registry
 from guillotina.utils import lazy_apply
+from typing import Any
+from typing import AsyncIterator
+from typing import Callable
+from typing import Dict
+from typing import List
+from typing import Optional
+from typing import Union
+from typing_extensions import TypedDict
 from zope.interface import implementer
 
 import asyncio
+import asyncpg
 import logging
 import sys
 import time
 
 
-_EMPTY = '__<EMPTY VALUE>__'
+_EMPTY = "__<EMPTY VALUE>__"
+
+
+class ObjectResultType(TypedDict, total=False):
+    state: bytes
+    zoid: str
+    tid: str
+    id: str
+    parent_id: Optional[str]
+
+
+try:
+    import prometheus_client
+
+    CACHE_HITS = prometheus_client.Counter(
+        "guillotina_cache_ops_total",
+        "Total count of ops by type of operation and the error if there was.",
+        labelnames=["type", "result"],
+    )
+
+    def record_cache_metric(
+        name: str, result_type: str, value: Union[ObjectResultType, str], key_args: Dict[str, Any]
+    ) -> None:
+        if value == _EMPTY:
+            result_type += "_empty"
+        elif isinstance(value, (dict, asyncpg.Record)) and (
+            value["zoid"] == ROOT_ID
+            or value.get("parent_id") == ROOT_ID
+            or isinstance(key_args.get("container"), (Container, Registry, Root))
+        ):
+            # since these types of objects will always be in cache, let's tag these differently
+            result_type += "_roots"
+        CACHE_HITS.labels(type=name, result=result_type).inc()
+
+
+except ImportError:
+
+    def record_cache_metric(
+        name: str, result_type: str, value: Union[ObjectResultType, str], key_args: Dict[str, Any]
+    ) -> None:
+        ...
 
 
 logger = logging.getLogger(__name__)
@@ -35,14 +87,19 @@ class Status:
     COMMITTING = "Committing"
     COMMITTED = "Committed"
     ABORTED = "Aborted"
-    CONFLICT = 'Conflict'
+    CONFLICT = "Conflict"
 
 
 class cache:
-
-    def __init__(self, key_gen, check_state_size=False):
+    def __init__(
+        self,
+        key_gen: Callable[..., Dict[str, Any]],
+        check_state_size=False,
+        additional_keys: Optional[List[Callable[[Dict[str, Any]], Dict[str, Any]]]] = None,
+    ):
         self.key_gen = key_gen
         self.check_state_size = check_state_size
+        self.additional_keys = additional_keys or []
 
     def __call__(self, func):
         this = self
@@ -50,38 +107,68 @@ class cache:
         async def _wrapper(self, *args, **kwargs):
             key_args = this.key_gen(*args, **kwargs)
             result = await self._cache.get(**key_args)
-            if result is not None:
-                self._cache._hits += 1
-                return result
-            result = await func(self, *args, **kwargs)
 
             if result is not None:
-                self._cache._misses += 1
-                try:
-                    if (not this.check_state_size or
-                            len(result['state']) < self._cache.max_cache_record_size):
+                record_cache_metric(func.__name__, "hit", result, key_args)
+                return result
+
+            result = await func(self, *args, **kwargs)
+
+            record_cache_metric(func.__name__, "miss", result, key_args)
+            if result is not None:
+                if result == _EMPTY:
+                    await self._cache.set(result, keyset=[key_args])
+                else:
+                    try:
+                        if (
+                            not this.check_state_size
+                            or len(result["state"]) < self._cache.max_cache_record_size
+                        ):
+                            await self._cache.set(
+                                result,
+                                keyset=[key_args] + [key_gen(result) for key_gen in this.additional_keys],
+                            )
+                    except (TypeError, KeyError):
                         await self._cache.set(result, **key_args)
-                        self._cache._stored += 1
-                except (TypeError, KeyError):
-                    await self._cache.set(result, **key_args)
-                    self._cache._stored += 1
                 return result
 
         return _wrapper
 
 
 @implementer(ITransaction)
-class Transaction(object):
-    _status = 'empty'
+class Transaction:
+    _status = "empty"
     _skip_commit = False
+    user = None
 
-    def __init__(self, manager, request=None, loop=None):
+    def __init__(
+        self, manager, loop=None, read_only: bool = False, cache=None, strategy=None,
+    ):
+        # Transaction Manager
+        self._manager = manager
+
+        self.initialize(read_only, cache, strategy)
+
+        logger.debug("new transaction")
+
+        # Connection to DB
+        self._db_conn = None
+        # Transaction on DB
+        self._db_txn = None
+        # Lock on the transaction
+        # some databases need to lock during queries
+        # this provides a lock for each transaction
+        # which would correspond with one connection
+        self._lock = asyncio.Lock(loop=loop)
+
+    def initialize(
+        self, read_only, cache=None, strategy=None,
+    ):
+        self._read_only = read_only
         self._txn_time = None
         self._tid = None
         self.status = Status.ACTIVE
-
-        # Transaction Manager
-        self._manager = manager
+        self.user = None
 
         # List of objects added
         # needs to be ordered because content inserted after other might
@@ -96,32 +183,13 @@ class Transaction(object):
         # List of (hook, args, kws) tuples added by addAfterCommitHook().
         self._after_commit = []
 
-        logger.debug("new transaction")
-
-        # Connection to DB
-        self._db_conn = None
-        # Transaction on DB
-        self._db_txn = None
-        # Lock on the transaction
-        # some databases need to lock during queries
-        # this provides a lock for each transaction
-        # which would correspond with one connection
-        self._lock = asyncio.Lock(loop=loop)
-
-        # we *not* follow naming standards of using "_request" here so
-        # get_current_request can magically find us here...
-        self.request = request
-        self._strategy = get_adapter(self, ITransactionStrategy,
-                                     name=manager._storage._transaction_strategy)
-        self._cache = get_adapter(self, IStorageCache,
-                                  name=manager._storage._cache_strategy)
-
+        self._cache = cache or query_adapter(self, ITransactionCache, name=app_settings["cache"]["strategy"])
         self._query_count_start = self._query_count_end = 0
 
     def get_query_count(self):
-        '''
+        """
         diff versions of asyncpg
-        '''
+        """
         if self._db_conn is None:
             return 0
         try:
@@ -140,8 +208,12 @@ class Transaction(object):
         return self._db_conn
 
     @property
-    def strategy(self):
-        return self._strategy
+    def connection_reserved(self):
+        return self._db_conn is not None
+
+    @property
+    def lock(self):
+        return self._lock
 
     @property
     def manager(self):
@@ -152,28 +224,24 @@ class Transaction(object):
         return self._manager._storage
 
     def get_before_commit_hooks(self):
-        """ See ITransaction.
-        """
+        """See ITransaction."""
         return iter(self._before_commit)
 
-    def add_before_commit_hook(self, hook, *real_args, args=[], kws=None, **kwargs):
-        """ See ITransaction.
-        """
-        if kws is None:
-            kws = {}
+    def add_before_commit_hook(self, hook, *real_args, args=None, kws=None, **kwargs):
+        """See ITransaction."""
+        args = args or []
+        kws = kws or {}
         kwargs.update(kws)
         self._before_commit.append((hook, real_args + tuple(args), kwargs))
 
     def get_after_commit_hooks(self):
-        """ See ITransaction.
-        """
+        """See ITransaction."""
         return iter(self._after_commit)
 
-    def add_after_commit_hook(self, hook, *real_args, args=[], kws=None, **kwargs):
-        """ See ITransaction.
-        """
-        if kws is None:
-            kws = {}
+    def add_after_commit_hook(self, hook, *real_args, args=None, kws=None, **kwargs):
+        """See ITransaction."""
+        args = args or []
+        kws = kws or {}
         kwargs.update(kws)
         self._after_commit.append((hook, real_args + tuple(args), kwargs))
 
@@ -196,8 +264,7 @@ class Transaction(object):
             except Exception:
                 # We need to catch the exceptions if we want all hooks
                 # to be called
-                logger.error("Error in after commit hook exec in %s ",
-                             hook, exc_info=sys.exc_info())
+                logger.error("Error in after commit hook exec in %s ", hook, exc_info=sys.exc_info())
         self._after_commit = []
 
     # BEGIN TXN
@@ -207,49 +274,52 @@ class Transaction(object):
         conn is a real db that will be got by db.open()
         """
         self._txn_time = time.time()
-        await self._strategy.tpc_begin()
         # make sure this is reset on retries
         self._after_commit = []
         self._before_commit = []
 
-    def check_read_only(self):
-        if self.request is None:
-            try:
-                self.request = get_current_request()
-            except RequestNotFound:
-                return False
-        if hasattr(self.request, '_db_write_enabled') and not self.request._db_write_enabled:
-            raise Unauthorized('Adding content not permited')
-        # Add the new tid
+    @property
+    def read_only(self) -> bool:
+        if self._read_only:
+            return True
         if self._manager._storage._read_only:
-            raise ReadOnlyError()
+            return True
+        return False
 
     @profilable
-    def register(self, obj, new_oid=None):
+    def register(self, obj: IBaseObject, new_oid: Optional[str] = None):
         """We are adding a new object on the DB"""
-        self.check_read_only()
+        if self.read_only:
+            raise ReadOnlyError()
 
-        if obj._p_jar is None:
-            obj._p_jar = self
+        if self.status in (Status.ABORTED, Status.COMMITTED, Status.CONFLICT):
+            raise TransactionClosedException(f"Could not save {obj} to closed transaction", self, obj)
 
-        oid = obj._p_oid
+        if obj.__txn__ is None:
+            obj.__txn__ = self
+
+        oid = obj.__uuid__
         new = False
         if oid is None:
             if new_oid is not None:
                 new = True
             else:
-                new_oid = app_settings['oid_generator'](obj)
+                new_oid = app_settings["uid_generator"](obj)
             oid = new_oid
 
-        obj._p_oid = oid
+        obj.__uuid__ = oid
         if new or obj.__new_marker__:
             self.added[oid] = obj
-        elif oid not in self.modified and oid not in self.added:
+        elif oid in self.modified:
+            if id(obj) != id(self.modified[oid]):
+                raise TransactionObjectRegistrationMismatchException(self.modified[oid], obj)
+        elif oid not in self.added:
             self.modified[oid] = obj
 
-    def delete(self, obj):
-        self.check_read_only()
-        oid = obj._p_oid
+    def delete(self, obj: IBaseObject):
+        if self.read_only:
+            raise ReadOnlyError()
+        oid = obj.__uuid__
         if oid is not None:
             if oid in self.modified:
                 del self.modified[oid]
@@ -262,22 +332,27 @@ class Transaction(object):
         await self._cache.clear()
 
     async def refresh(self, ob):
-        '''
+        """
         refresh an object with the value from the database
-        '''
-        new = await self.get(ob._p_oid, ignore_registered=True)
+        """
+        new = await self.get(ob.__uuid__, ignore_registered=True)
         for key, value in new.__dict__.items():
-            if key.startswith('_p') or key.startswith('__'):
+            if key.startswith("__"):
                 continue
             ob.__dict__[key] = value
-        ob._p_serial = new._p_serial
+        ob.__serial__ = new.__serial__
+        ob.__txn__ = self
 
-    @cache(lambda oid: {'oid': oid}, True)
+    @cache(
+        lambda oid: {"oid": oid},
+        True,
+        additional_keys=[lambda item: {"container": item["parent_id"], "id": item["id"]}],
+    )
     async def _get(self, oid):
         return await self._manager._storage.load(self, oid)
 
     @profilable
-    async def get(self, oid, ignore_registered=False):
+    async def get(self, oid: str, ignore_registered: bool = False) -> IBaseObject:
         """Getting a oid from the db"""
         if not ignore_registered:
             obj = self.modified.get(oid, None)
@@ -288,15 +363,15 @@ class Transaction(object):
         if result is None:
             result = await self._get(oid)
 
-        obj = reader(result)
-        obj._p_jar = self
+        obj = app_settings["object_reader"](result)
+        obj.__txn__ = self
         if obj.__immutable_cache__:
             # ttl of zero means we want to provide a hard cache here
             self._manager._hard_cache[oid] = result
 
         return obj
 
-    async def commit(self):
+    async def commit(self) -> None:
         restarts = 0
         while True:
             # for now, the max commit restarts we'll manage...
@@ -307,8 +382,8 @@ class Transaction(object):
                 if restarts >= 3:
                     raise
                 else:
-                    logger.warn(f'Restarting commit for tid: {self._tid}')
-                    await self._db_txn.restart()
+                    logger.warn(f"Restarting commit for tid: {self._tid}")
+                    await self._db_txn.restart()  # type: ignore
 
     @profilable
     async def _commit(self):
@@ -330,7 +405,7 @@ class Transaction(object):
             # and invalidate again to make sure we aren't caching the ob
             self.status = Status.CONFLICT
             await self._manager._storage.abort(self)
-            await self._cache.close(invalidate=isinstance(ex, TIDConflictError))
+            await self._cache.close(invalidate=isinstance(ex, TIDConflictError), publish=False)
             self.tpc_cleanup()
             raise
         self.status = Status.COMMITTED
@@ -351,50 +426,65 @@ class Transaction(object):
         self._before_commit = []
 
     @profilable
-    async def _store_object(self, obj, oid, added=False):
-        # Modified objects
-        if obj._p_jar is not self and obj._p_jar is not None:
-            raise Exception(f'Invalid reference to txn: {obj}')
-
+    async def _store_object(self, obj, uid, added=False):
         # There is no serial
         if added:
             serial = None
         else:
-            serial = getattr(obj, "_p_serial", 0)
+            serial = getattr(obj, "__serial__", None) or 0
 
         writer = IWriter(obj)
-        await self._manager._storage.store(oid, serial, writer, obj, self)
-        obj._p_serial = self._tid
-        obj._p_oid = oid
-        if obj._p_jar is None:
-            obj._p_jar = self
+        await self._manager._storage.store(uid, serial, writer, obj, self)
+        obj.__serial__ = self._tid
+        obj.__uuid__ = uid
+        if obj.__txn__ is None:
+            obj.__txn__ = self
+
+    async def initialize_tid(self) -> None:
+        if not self.read_only:
+            tid = await self.storage.get_next_tid(self)
+            if tid is not None:
+                self._tid = tid
 
     @profilable
     async def tpc_commit(self):
         """Commit changes to an object"""
-        await self._strategy.tpc_commit()
+
+        await self.initialize_tid()
+
+        if self._db_txn is None:
+            await self.storage.start_transaction(self)
+
+        for oid, obj in self.deleted.items():
+            await self._manager._storage.delete(self, oid)
         for oid, obj in self.added.items():
             await self._store_object(obj, oid, True)
             obj.__new_marker__ = False
         for oid, obj in self.modified.items():
             await self._store_object(obj, oid)
-        for oid, obj in self.deleted.items():
-            if obj._p_jar is not self and obj._p_jar is not None:
-                raise Exception(f'Invalid reference to txn: {obj}')
-            await self._manager._storage.delete(self, oid)
 
     @profilable
     async def tpc_vote(self):
         """Verify that a data manager can commit the transaction."""
-        ok = await self._strategy.tpc_vote()
-        if ok is False:
-            raise ConflictError(self)
+        # potential conflict error, get changes
+        # Check if there is any commit bigger than the one we already have
+        conflicts = await self.storage.get_conflicts(self)
+        for conflict in conflicts:
+            # both writing to same object...
+            if conflict["zoid"] in self.modified and conflict["zoid"] not in (ROOT_ID,):
+                modified_keys = [k for k in self.modified.keys()]
+                logger.warning(
+                    f"Could not resolve conflicts in TID: {self._tid}\n"
+                    f'Conflicted TID: {conflict["tid"]}\n'
+                    f"IDs: {modified_keys}"
+                )
+                raise ConflictError(self)
 
     @profilable
     async def tpc_finish(self):
-        """Indicate confirmation that the transaction is done.
-        """
-        await self._strategy.tpc_finish()
+        """Indicate confirmation that the transaction is done."""
+        if not self.read_only:
+            await self.storage.commit(self)
         await self._cache.close()
         self.tpc_cleanup()
 
@@ -407,16 +497,20 @@ class Transaction(object):
     # Inspection
 
     @profilable
-    @cache(lambda oid: {'oid': oid, 'variant': 'keys'})
-    async def keys(self, oid):
+    @cache(lambda oid: {"oid": oid, "variant": "keys"})
+    async def keys(self, oid: str) -> List[str]:
         keys = []
         for record in await self._manager._storage.keys(self, oid):
-            keys.append(record['id'])
+            keys.append(record["id"])
         return keys
 
-    @cache(lambda container, key: {'container': container, 'id': key}, True)
+    @cache(
+        lambda container, key: {"container": container, "id": key},
+        True,
+        additional_keys=[lambda item: {"oid": item["zoid"]}],
+    )
     async def _get_child(self, container, key):
-        return await self._manager._storage.get_child(self, container._p_oid, key)
+        return await self._manager._storage.get_child(self, container.__uuid__, key)
 
     @profilable
     async def get_child(self, parent, key):
@@ -426,33 +520,30 @@ class Transaction(object):
 
         return self._fill_object(result, parent)
 
-    def _fill_object(self, item, parent):
-        obj = reader(item)
+    def _fill_object(self, item: dict, parent: IBaseObject) -> IBaseObject:
+        obj = app_settings["object_reader"](item)
         obj.__parent__ = parent
-        obj._p_jar = self
+        obj.__txn__ = self
         return obj
 
-    async def _get_batch_children(self, parent, keys):
-        for litem in await self._manager._storage.get_children(
-                self, parent._p_oid, keys):
-            if len(litem['state']) < self._cache.max_cache_record_size:
-                await self._cache.set(litem, container=parent, id=litem['id'])
-                self._cache._stored += 1
+    async def _get_batch_children(self, parent: IBaseObject, keys: List[str]) -> AsyncIterator[IBaseObject]:
+        for litem in await self._manager._storage.get_children(self, parent.__uuid__, keys):
+            if len(litem["state"]) < self._cache.max_cache_record_size:
+                await self._cache.set(litem, container=parent, id=litem["id"])
             yield self._fill_object(litem, parent)
 
     async def get_children(self, parent, keys):
-        '''
+        """
         More performant way to get groups of items.
         - look at cache
         - batch get from storage
         - async for iterate items
         - store retrieved values in storage
-        '''
+        """
         lookup_group = []  # backlog of object that need to be looked up
         for key in keys:
             item = await self._cache.get(container=parent, id=key)
             if item is None:
-                self._cache._misses += 1
                 lookup_group.append(key)
                 if len(lookup_group) > 15:  # limit batch size
                     async for litem in self._get_batch_children(parent, lookup_group):
@@ -460,7 +551,6 @@ class Transaction(object):
                     lookup_group = []
                 continue
 
-            self._cache._hits += 1
             if len(lookup_group) > 0:
                 # we need to clear this buffer first before we can yield this item
                 async for litem in self._get_batch_children(parent, lookup_group):
@@ -475,44 +565,57 @@ class Transaction(object):
                 yield item
 
     @profilable
-    async def contains(self, oid, key):
+    async def contains(self, oid: str, key: str) -> bool:
+        for obj in self.deleted.values():
+            if obj.id == key and obj.__parent__.__uuid__ == oid:
+                return False
+
         return await self._manager._storage.has_key(self, oid, key)  # noqa
 
     @profilable
-    @cache(lambda oid: {'oid': oid, 'variant': 'len'})
-    async def len(self, oid):
+    @cache(lambda oid: {"oid": oid, "variant": "len"})
+    async def len(self, oid: str) -> bool:
         return await self._manager._storage.len(self, oid)
 
     @profilable
     async def items(self, container):
         # XXX not using cursor because we can't cache with cursor results...
-        keys = await self.keys(container._p_oid)
+        keys = await self.keys(container.__uuid__)
         async for item in self.get_children(container, keys):
             yield item.__name__, item
 
     @profilable
-    @cache(lambda base_obj, id: {'container': base_obj, 'id': id, 'variant': 'annotation'}, True)
+    @cache(
+        lambda base_obj, id: {"container": base_obj, "id": id, "variant": "annotation"},
+        True,
+        additional_keys=[lambda item: {"oid": item["zoid"]}],
+    )
     async def _get_annotation(self, base_obj, id):
-        result = await self._manager._storage.get_annotation(self, base_obj._p_oid, id)
+        try:
+            result = await self._manager._storage.get_annotation(self, base_obj.__uuid__, id)
+        except KeyError:
+            return _EMPTY
         if result is None:
             return _EMPTY
         return result
 
     @profilable
-    async def get_annotation(self, base_obj, id):
+    async def get_annotation(self, base_obj, id, reader=None):
         result = await self._get_annotation(base_obj, id)
         if result == _EMPTY:
             raise KeyError(id)
-        obj = reader(result)
-        obj.__of__ = base_obj._p_oid
-        obj._p_jar = self
+        if reader is None:
+            obj = app_settings["object_reader"](result)
+        else:
+            obj = reader(result)
+        obj.__of__ = base_obj.__uuid__
+        obj.__txn__ = self
         return obj
 
     @profilable
-    @cache(lambda oid: {'oid': oid, 'variant': 'annotation-keys'})
+    @cache(lambda oid: {"oid": oid, "variant": "annotation-keys"})
     async def get_annotation_keys(self, oid):
-        return [r['id'] for r in
-                await self._manager._storage.get_annotation_keys(self, oid)]
+        return [r["id"] for r in await self._manager._storage.get_annotation_keys(self, oid)]
 
     async def del_blob(self, bid):
         return await self._manager._storage.del_blob(self, bid)
@@ -533,32 +636,46 @@ class Transaction(object):
         return await self._manager._storage.get_total_number_of_resources(self)
 
     async def get_total_resources_of_type(self, type_):
-        return await self._manager._storage.get_total_resources_of_type(
-            self, type_)
+        return await self._manager._storage.get_total_resources_of_type(self, type_)
 
     async def _get_resources_of_type(self, type_, page_size=1000):
         page = 1
         keys = await self._manager._storage._get_page_resources_of_type(
-            self, type_, page=page, page_size=page_size)
+            self, type_, page=page, page_size=page_size
+        )
         while len(keys) > 0:
             for key in keys:
                 yield key
             page += 1
             keys = await self._manager._storage._get_page_resources_of_type(
-                self, type_, page=page, page_size=page_size)
+                self, type_, page=page, page_size=page_size
+            )
 
     async def get_page_of_keys(self, parent_oid, page=1, page_size=1000):
-        return await self._manager._storage.get_page_of_keys(
-            self, parent_oid, page=page, page_size=page_size)
+        return await self._manager._storage.get_page_of_keys(self, parent_oid, page=page, page_size=page_size)
 
     @profilable
     async def iterate_keys(self, oid, page_size=1000):
         page = 1
-        keys = await self._manager._storage.get_page_of_keys(
-            self, oid, page=page, page_size=page_size)
+        keys = await self._manager._storage.get_page_of_keys(self, oid, page=page, page_size=page_size)
         while len(keys) > 0:
             for key in keys:
                 yield key
             page += 1
-            keys = await self._manager._storage.get_page_of_keys(
-                self, oid, page=page, page_size=page_size)
+            keys = await self._manager._storage.get_page_of_keys(self, oid, page=page, page_size=page_size)
+
+    def __enter__(self):
+        task_vars.tm.set(self.manager)
+        task_vars.txn.set(self)
+        return self
+
+    def __exit__(self, *args):
+        """
+        contextvars already tears down to previous value, do not set to None here!
+        """
+
+    async def __aenter__(self):
+        return self.__enter__()
+
+    async def __aexit__(self, *args):
+        return self.__exit__()

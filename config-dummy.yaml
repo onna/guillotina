@@ -1,4 +1,6 @@
 ---
+applications:
+- guillotina.contrib.swagger
 databases:
   d:
     storage: DUMMY
@@ -28,3 +30,7 @@ cors:
 utilities: []
 jsapps:
   +admin: guillotina:static/executioner
+static:
+  assets: guillotina:static/assets
+jwt:
+  secret: secret

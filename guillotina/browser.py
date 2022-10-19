@@ -1,4 +1,5 @@
 from guillotina import configure
+from guillotina import task_vars
 from guillotina.component import adapter
 from guillotina.interfaces import IAbsoluteURL
 from guillotina.interfaces import ILocation
@@ -6,6 +7,7 @@ from guillotina.interfaces import IRequest
 from guillotina.interfaces import IResource
 from guillotina.interfaces import IView
 from guillotina.utils import get_current_request
+from guillotina.utils import get_url
 from zope.interface import implementer
 
 
@@ -15,15 +17,15 @@ def get_physical_path(context):
     while parent is not None and parent.__name__ is not None:
         parts.append(parent.__name__)
         parent = parent.__parent__
-    parts.append('')
+    parts.append("")
     return [x for x in reversed(parts)]
 
 
 @adapter(IResource, IRequest)
 @implementer(IView, ILocation)
-class View(object):
+class View:
 
-    __name__ = 'view'
+    __name__ = "view"
 
     # An attribute that marks that a view should not
     # be unauthorized by AccessContent on the object
@@ -41,17 +43,11 @@ class View(object):
         return self.context
 
     async def __call__(self):
-        return {
-            'context': str(self.context),
-            'path': '/'.join(get_physical_path(self.context))
-        }
+        return {"context": str(self.context), "path": "/".join(get_physical_path(self.context))}
 
 
-@configure.adapter(
-    for_=(IResource, IRequest),  # noqa: N801
-    provides=IAbsoluteURL)
+@configure.adapter(for_=(IResource, IRequest), provides=IAbsoluteURL)  # noqa: N801
 class Absolute_URL(object):
-
     def __init__(self, context, request):
         self.context = context
         self.request = request
@@ -61,35 +57,22 @@ class Absolute_URL(object):
             # we want the url relative to container so remove the container
             path = [x for x in get_physical_path(self.context)]
             path.pop(1)
-            path = '/'.join(path)
+            path = "/".join(path)
         else:
-            path = '/'.join(get_physical_path(self.context))
-
-        if 'X-VirtualHost-Monster' in self.request.headers:
-            virtualhost = self.request.headers['X-VirtualHost-Monster']
-        else:
-            virtualhost = None
+            path = "/".join(get_physical_path(self.context))
 
         if container_url:
             return path
         elif relative:
-            return '/' + self.request._db_id + path
-        elif virtualhost:
-            return virtualhost + self.request._db_id + path
+            db = task_vars.db.get()
+            return "/" + db.id + path
         else:
-            if 'X-Forwarded-Proto' in self.request.headers:
-                scheme = self.request.headers['X-Forwarded-Proto']
-            else:
-                scheme = self.request.scheme
-            return scheme + '://' + (self.request.host or 'localhost') + '/' +\
-                self.request._db_id + path
+            db = task_vars.db.get()
+            return get_url(self.request, db.id + path)
 
 
-@configure.adapter(
-    for_=IResource,  # noqa: N801
-    provides=IAbsoluteURL)
+@configure.adapter(for_=IResource, provides=IAbsoluteURL)  # noqa: N801
 class Absolute_URL_ObtainRequest(Absolute_URL):
-
     def __init__(self, context):
         request = get_current_request()
         super().__init__(context, request)

@@ -1,36 +1,36 @@
+from guillotina.interfaces import Allow
 from guillotina.interfaces import IPrincipal
 from zope.interface import implementer
 
 
-ROOT_USER_ID = 'root'
-ANONYMOUS_USER_ID = 'Anonymous User'
+ROOT_USER_ID = "root"
+ANONYMOUS_USER_ID = "Anonymous User"
 
 
 @implementer(IPrincipal)
-class BaseUser(object):
-    pass
+class BaseUser:
+    groups: list
+    id: str
 
 
 class SystemUser(BaseUser):
-    id = 'guillotina.SystemUser'
-    title = 'System'
-    description = ''
+    id = "guillotina.SystemUser"
+    title = "System"
+    description = ""
 
 
 class RootUser(BaseUser):
     def __init__(self, password):
         self.id = ROOT_USER_ID
         self.password = password
-        self.groups = ['Managers']
+        self.groups = ["Managers"]
         self.roles = {}
         self.properties = {}
         self.permissions = {}
 
 
 class GuillotinaUser(BaseUser):
-
-    def __init__(self, user_id='guillotina', groups=None, roles=None,
-                 permissions=None, properties=None):
+    def __init__(self, user_id="guillotina", groups=None, roles=None, permissions=None, properties=None):
         self.id = user_id
         self._groups = groups or []
         self._roles = roles or {}
@@ -55,7 +55,12 @@ class GuillotinaUser(BaseUser):
 
 
 class AnonymousUser(GuillotinaUser):
-
-    def __init__(self, request):
-        super(AnonymousUser, self).__init__(request)
+    def __init__(self):
+        super().__init__()
         self.id = ANONYMOUS_USER_ID
+        self._roles["guillotina.Anonymous"] = Allow
+
+    @property
+    def roles(self):
+        # This prevents roles from being modified for anonymous user
+        return self._roles.copy()

@@ -1,11 +1,10 @@
-from guillotina.schema import BytesLine
 from zope.interface import Interface
 
 
 class IDatabaseConfigurationFactory(Interface):
-    '''
+    """
     Factory to create database object
-    '''
+    """
 
 
 class IConfigurationContext(Interface):
@@ -17,17 +16,7 @@ class IConfigurationContext(Interface):
     importing objects and opening files relative to the package.
     """
 
-    package = BytesLine(
-        title='The current package name',
-        description="""\
-          This is the name of the package containing the configuration
-          file being executed. If the configuration file was not
-          included by package, then this is None.
-          """,
-        required=False)
-
-    def action(discriminator, callable, args=(), kw={}, order=0,  # noqa: N805
-               includepath=None, info=None):
+    def action(discriminator, callable=None, args=(), kw=None, **extra):
         """Record a configuration action
 
         The job of most directives is to compute actions for later

@@ -9,11 +9,14 @@ which seem most useful.
 
    configure
    content
+   contentapi
    request
    response
    fields
    component
    utils
+   factory
+   transactions
 
 
-.. consider adding schema, security, transactions, auth, blob, directives
+.. consider adding schema, security, auth, blob, directives

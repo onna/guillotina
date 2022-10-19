@@ -34,6 +34,9 @@ about timing, number of queries and cache hit/miss stats.
 On startup, you can also provide the environment variable `GDEBUG=true`.
 This will provide detailed query statistics with the `X-Debug:1`.
 
+Additionally, you can provide `GDEBUG_SUBSCRIBERS` to get detailed timings
+logged for event subscribers.
+
 
 ## aiomonitor
 
@@ -59,3 +62,10 @@ Finally, connect to it:
 ```bash
 python -m aiomonitor.cli
 ```
+
+
+## Jupyter
+
+Guillotina also works with Jupyter notebooks. Load the
+[example notebook](https://github.com/plone/guillotina/blob/master/guillotina.ipynb) in the guillotina
+repository to see an example of how to get started.

@@ -10,7 +10,10 @@ class IBaseObject(Interface):
     """Python base object interface
     """
 
-    _p_jar = Attribute(
+    __name__ = Attribute("")
+    __parent__ = Attribute("")
+
+    __txn__ = Attribute(
         """The data manager for the object.
 
         The data manager should implement IPersistentDataManager (note that
@@ -20,9 +23,10 @@ class IBaseObject(Interface):
 
         Once assigned to a data manager, an object cannot be re-assigned
         to another.
-        """)
+        """
+    )
 
-    _p_oid = Attribute(
+    __uuid__ = Attribute(
         """The object id.
 
         It is up to the data manager to assign this.
@@ -33,34 +37,22 @@ class IBaseObject(Interface):
         database root object.
 
         Once assigned an OID, an object cannot be re-assigned another.
-        """)
+        """
+    )
 
-    _p_serial = Attribute(
+    __serial__ = Attribute(
         """The object serial number.
 
         This member is used by the data manager to distiguish distinct
         revisions of a given persistent object.
 
         This is an 8-byte string (not Unicode).
-        """)
+        """
+    )
 
     # Attribute access protocol
     def __getattribute__(name):  # type: ignore
-        """ Handle activating ghosts before returning an attribute value.
-
-        "Special" attributes and '_p_*' attributes don't require activation.
         """
-
-    def __setattr__(name, value):  # type: ignore
-        """ Handle activating ghosts before setting an attribute value.
-
-        "Special" attributes and '_p_*' attributes don't require activation.
-        """
-
-    def __delattr__(name):  # type: ignore
-        """ Handle activating ghosts before deleting an attribute value.
-
-        "Special" attributes and '_p_*' attributes don't require activation.
         """
 
     # Pickling protocol.
@@ -70,3 +62,6 @@ class IBaseObject(Interface):
         The state should not include persistent attributes ("_p_name").
         The result must be picklable.
         """
+
+    def register():
+        ...

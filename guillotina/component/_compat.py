@@ -13,14 +13,14 @@
 ##############################################################################
 # flake8: noqa
 
+import pickle as _pickle
 import sys
 import types
 
-import pickle as _pickle
 
 CLASS_TYPES = (type,)
 
 PYTHON3 = True
 PYTHON2 = False
 
-_BLANK = u''
+_BLANK = ""
