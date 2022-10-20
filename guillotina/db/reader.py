@@ -2,6 +2,7 @@ from guillotina.db.orm.interfaces import IBaseObject
 
 import brotli
 import pickle
+import struct
 import typing
 
 PICKLE_PREFIXES = [
