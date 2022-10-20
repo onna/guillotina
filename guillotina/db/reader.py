@@ -1,16 +1,27 @@
 from guillotina.db.orm.interfaces import IBaseObject
 
-import gzip
+import brotli
 import pickle
 import typing
+
+PICKLE_PREFIXES = [
+    pickle.PROTO + struct.pack("<B", pickle.HIGHEST_PROTOCOL),
+    pickle.PROTO + struct.pack("<B", pickle.DEFAULT_PROTOCOL),
+]
 
 
 def reader(result: dict) -> IBaseObject:
     state = result["state"]
-    if result["state"][0:2] == b"\x1f\x8b":
-        state = pickle.loads(gzip.decompress(state))
+
+    # Detect if this is a compressed or plain pickle.
+    if state[-1] == pickle.STOP and state[0:2] in PICKLE_PREFIXES:
+        try:
+            state = pickle.loads(state)
+        except pickle.UnpicklingError:
+            state = pickle.loads(brotli.decompress(state))
     else:
-        state = pickle.loads(state)
+        state = pickle.loads(brotli.decompress(state))
+
     obj = typing.cast(IBaseObject, state)
     obj.__uuid__ = result["zoid"]
     obj.__serial__ = result["tid"]
