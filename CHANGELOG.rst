@@ -1,5 +1,10 @@
 CHANGELOG
 =========
+5.4.2 (2022-10-20)
+------------------
+
+- Set eager_global_ordinals to true for keyword field type mappings
+
 5.4.1 (2022-10-19)
 ------------------
 

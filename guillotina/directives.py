@@ -148,6 +148,8 @@ class index_field(MetadataDictDirective):  # noqa: N801
             raise Exception(
                 "Invalid index type {}. Avilable types are: {}".format(name, ", ".join(self.allowed_types))
             )
+        if kw.get("type") == "keyword":
+            return {name: kw, "eager_global_ordinals": True}
         return {name: kw}
 
     @classmethod
