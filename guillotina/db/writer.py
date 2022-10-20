@@ -9,7 +9,7 @@ from guillotina.interfaces import IResource
 from guillotina.utils import find_container
 from guillotina.utils import get_dotted_name
 
-import gzip
+import brotli
 import pickle
 
 
@@ -59,7 +59,7 @@ class Writer(object):
 
     def serialize(self):
         protocol = app_settings.get("pickle_protocol", pickle.HIGHEST_PROTOCOL)
-        return gzip.compress(pickle.dumps(self._obj, protocol=protocol))
+        return brotli.compress(pickle.dumps(self._obj, protocol=protocol))
 
     @property
     def parent_id(self):
