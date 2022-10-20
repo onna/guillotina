@@ -15,7 +15,7 @@ def reader(result: dict) -> IBaseObject:
     state = result["state"]
 
     # Detect if this is a compressed or plain pickle.
-    if state[-1] == pickle.STOP and state[0:2] in PICKLE_PREFIXES:
+    if state[-1:] == pickle.STOP and state[0:2] in PICKLE_PREFIXES:
         try:
             state = pickle.loads(state)
         except pickle.UnpicklingError:
