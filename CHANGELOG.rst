@@ -1,9 +1,15 @@
 CHANGELOG
 =========
+5.4.2 (2022-11-09)
+------------------
+
+- Update brotli compression quality to improve performance.
+
+
 5.4.1 (2022-10-19)
 ------------------
 
-- Enable gzip (de)compression on pickle dump fields.
+- Enable brotli (de)compression on pickle dump fields.
 
 
 5.4.0 (2021-04-20)
