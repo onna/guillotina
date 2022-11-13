@@ -52,9 +52,7 @@ class ContentAPI:
         return self._active_txn
 
     async def create(self, payload: dict, in_: IResource = None) -> IResource:
-        txn = await self.get_transaction()
-        await txn.initialize_tid()
-
+        await self.get_transaction()
         if in_ is None:
             in_ = self.db
         view = get_multi_adapter((in_, self.request), app_settings["http_methods"]["POST"], name="")

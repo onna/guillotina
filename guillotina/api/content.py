@@ -158,9 +158,6 @@ class DefaultPOST(Service):
     @profilable
     async def __call__(self):
         """To create a content."""
-        txn = get_transaction()
-        await txn.initialize_tid()
-
         data = await self.get_data()
         type_ = data.get("@type", None)
         id_ = data.get("id", None)
@@ -233,7 +230,6 @@ class DefaultPOST(Service):
             roleperm.assign_role_to_principal("guillotina.Owner", owner)
 
         data["id"] = obj.id
-        self.context.__serial__ = obj.__serial__ = self.context.__txn__._tid
         await notify(ObjectAddedEvent(obj, self.context, obj.id, payload=data))
 
         headers = {"Access-Control-Expose-Headers": "Location", "Location": get_object_url(obj, self.request)}
@@ -258,9 +254,6 @@ class DefaultPOST(Service):
 )
 class DefaultPATCH(Service):
     async def __call__(self):
-        txn = get_transaction()
-        await txn.initialize_tid()
-
         data = await self.get_data()
 
         behaviors = data.get("@behaviors", None)
@@ -284,8 +277,6 @@ class DefaultPATCH(Service):
         await notify(BeforeObjectModifiedEvent(self.context, payload=data))
 
         await deserializer(data)
-
-        self.context.__serial__ = self.context.__txn__._tid
 
         await notify(ObjectModifiedEvent(self.context, payload=data))
 

@@ -987,8 +987,6 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
                         "Incorrect response count from database update. "
                         "This should not happen. tid: {}".format(txn._tid)
                     )
-        # Sanity check to make sure __serial__ is up-to-date on object.
-        obj.__serial__ = txn._tid
         await txn._cache.store_object(obj, pickled)
 
     async def _txn_oid_commit_hook(self, status, oid):
