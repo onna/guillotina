@@ -987,7 +987,7 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
                         "Incorrect response count from database update. "
                         "This should not happen. tid: {}".format(txn._tid)
                     )
-        # Update the object's TID to match what was upserted.
+        # Sanity check to make sure __serial__ is up-to-date on object.
         obj.__serial__ = txn._tid
         await txn._cache.store_object(obj, pickled)
 
