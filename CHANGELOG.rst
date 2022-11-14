@@ -3,7 +3,7 @@ CHANGELOG
 5.4.3 (2022-11-13)
 ------------------
 
-- Update object __serial__ on insert/update.
+- Allow initialize_tid to be called multiple times.
 
 
 5.4.2 (2022-11-09)
