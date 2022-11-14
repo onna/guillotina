@@ -441,6 +441,8 @@ class Transaction:
             obj.__txn__ = self
 
     async def initialize_tid(self) -> None:
+        if self._tid is not None:
+            return self._tid
         if not self.read_only:
             tid = await self.storage.get_next_tid(self)
             if tid is not None:
