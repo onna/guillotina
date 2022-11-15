@@ -126,7 +126,6 @@ class cache:
                         result = None
 
                     if expected_tid:
-                        logger.info(f"Checking cache TID: {expected_tid}, {result.__class__}")
                         tid = result["tid"]
                         if tid != expected_tid:
                             logger.warning(f"Cache TID mismatch: {expected_tid} vs {tid} for {oid}")
