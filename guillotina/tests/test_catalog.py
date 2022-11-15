@@ -48,7 +48,8 @@ def get_title(ob):
 
 
 @configure.contenttype(
-    type_name="CustomItem", schema=ICustomItem,
+    type_name="CustomItem",
+    schema=ICustomItem,
 )
 class CustomItem(Resource):
     """

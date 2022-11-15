@@ -129,8 +129,7 @@ class Bytes(MinMaxLen, Field):
     _type = bytes
 
     def from_unicode(self, uc):
-        """ See IFromUnicode.
-        """
+        """See IFromUnicode."""
         v = make_binary(uc)
         self.validate(v)
         return v
@@ -181,8 +180,7 @@ class Float(Orderable, Field):
         super(Float, self).__init__(*args, **kw)
 
     def from_unicode(self, uc):
-        """ See IFromUnicode.
-        """
+        """See IFromUnicode."""
         v = float(uc)
         self.validate(v)
         return v
@@ -197,8 +195,7 @@ class Decimal(Orderable, Field):
         super(Decimal, self).__init__(*args, **kw)
 
     def from_unicode(self, uc):
-        """ See IFromUnicode.
-        """
+        """See IFromUnicode."""
         try:
             v = decimal.Decimal(uc)
         except decimal.InvalidOperation:
@@ -297,8 +294,7 @@ class Choice(Field):
         return clone
 
     def from_unicode(self, str):
-        """ See IFromUnicode.
-        """
+        """See IFromUnicode."""
         self.validate(str)
         return str
 
@@ -323,8 +319,7 @@ _isuri = re.compile(r"[a-zA-z0-9+.-]+:\S*$").match
 
 @implementer(IURI, IFromUnicode)  # type: ignore
 class URI(NativeStringLine):
-    """URI schema field
-    """
+    """URI schema field"""
 
     def _validate(self, value):
         super(URI, self)._validate(value)
@@ -334,8 +329,7 @@ class URI(NativeStringLine):
         raise InvalidURI(value)
 
     def from_unicode(self, value):
-        """ See IFromUnicode.
-        """
+        """See IFromUnicode."""
         v = str(value.strip())
         self.validate(v)
         return v
@@ -368,9 +362,7 @@ class DottedName(NativeStringLine):
         super(DottedName, self).__init__(*args, **kw)
 
     def _validate(self, value):
-        """
-
-        """
+        """ """
         super(DottedName, self)._validate(value)
         if not _isdotted(value):
             raise InvalidDottedName(value)
@@ -405,8 +397,7 @@ class Id(NativeStringLine):
         raise InvalidId(value)
 
     def from_unicode(self, value):
-        """ See IFromUnicode.
-        """
+        """See IFromUnicode."""
         v = value.strip()
         if not isinstance(v, self._type):
             v = v.encode("ascii")

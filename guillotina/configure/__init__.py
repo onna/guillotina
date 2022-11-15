@@ -628,8 +628,7 @@ def grant_directive(_context, principal=None, role=None, permission=None, permis
 
 
 def grantAll_directive(_context, principal=None, role=None):  # noqa: N802
-    """Grant all permissions to a role or principal
-    """
+    """Grant all permissions to a role or principal"""
     from guillotina.security.security_code import role_permission_manager
     from guillotina.security.security_code import principal_permission_manager
 

@@ -166,7 +166,7 @@ def make_mocked_request(
     transport=sentinel,
     payload=sentinel,
     sslcontext=None,
-    client_max_size=1024 ** 2,
+    client_max_size=1024**2,
 ):
     """
     XXX copied from aiohttp but using guillotina request object

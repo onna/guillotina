@@ -8,8 +8,7 @@ class IResponse(Interface):
     headers = Attribute("headers")
 
     def __init__(*, content: dict = None, headers: dict = None, status: int = None):
-        """
-        """
+        """ """
 
 
 class IAioHTTPResponse(Interface):
