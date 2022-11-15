@@ -110,6 +110,15 @@ WHERE zoid = $1::varchar({MAX_UID_LENGTH})
 )
 
 register_sql(
+    "GET_TID",
+    f"""
+SELECT tid
+FROM {{table_name}}
+WHERE zoid = $1::varchar({MAX_UID_LENGTH})
+""",
+)
+
+register_sql(
     "GET_CHILDREN_KEYS",
     f"""
 SELECT id
@@ -905,6 +914,13 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
         if objects is None:
             raise KeyError(oid)
         return objects
+
+    async def get_obj_tid(self, txn, oid):
+        sql = self._sql.get("GET_TID", self._objects_table_name)
+        result = await self.get_one_row(txn, sql, oid, metric="load_tid_by_oid")
+        if result is None:
+            raise KeyError(oid)
+        return result["tid"]
 
     @profilable
     async def store(self, oid, old_serial, writer, obj, txn):

@@ -31,6 +31,9 @@ class BaseStorage:
     async def load(self, txn, oid):
         raise NotImplemented()  # pragma: no cover
 
+    async def get_obj_tid(txn, oid):
+        raise NotImplemented()  # pragma: no cover
+
     async def store(self, oid, old_serial, writer, obj, txn):
         raise NotImplemented()  # pragma: no cover
 
