@@ -59,7 +59,7 @@ class DummyStorage(BaseStorage):  # type: ignore
             raise KeyError(oid)
         return objects
 
-    async def get_obj_tid(txn, oid):
+    async def get_obj_tid(self, txn, oid):
         obj = self._db[oid]
         if obj is None:
             raise KeyError(oid)
