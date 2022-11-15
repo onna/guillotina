@@ -15,7 +15,8 @@ from guillotina.security.security_code import RolePermissionManager
 
 @configure.adapter(for_=IDatabase, provides=IInheritPermissionManager)
 class DatabaseSpecialInheritPermissions(InheritPermissionManager):
-    """This adapter will allow all inheritance."""
+    """This adapter will allow all inheritance.
+    """
 
     def __init__(self, db):
         super().__init__()
@@ -23,7 +24,8 @@ class DatabaseSpecialInheritPermissions(InheritPermissionManager):
 
 @configure.adapter(for_=IApplication, provides=IInheritPermissionManager)
 class ApplicationSpecialInheritPermissions(InheritPermissionManager):
-    """This adapter will allow all inheritance"""
+    """This adapter will allow all inheritance
+    """
 
     def __init__(self, app):
         super().__init__()

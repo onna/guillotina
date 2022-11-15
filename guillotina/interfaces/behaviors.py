@@ -67,7 +67,8 @@ class IBehaviorAdapterFactory(Interface):
 
 
 class IContentBehavior(Interface):
-    """ """
+    """
+    """
 
     auto_serialize = Attribute("Automatically serialize behavior")
 

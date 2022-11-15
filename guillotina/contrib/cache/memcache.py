@@ -15,6 +15,7 @@ try:
     def record_memory_op(type: str, result: str) -> None:
         MEMORY_OPS.labels(type=type, result=result).inc()
 
+
 except ImportError:
 
     def record_memory_op(type: str, result: str) -> None:

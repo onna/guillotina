@@ -86,6 +86,7 @@ try:
         def __init__(self, lock: asyncio.Lock, operation: str):
             super().__init__(lock, PG_LOCK_ACQUIRE_TIME, labels={"type": operation})
 
+
 except ImportError:
     watch = metrics.dummy_watch  # type: ignore
 

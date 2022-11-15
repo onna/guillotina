@@ -88,7 +88,8 @@ class ConfigurationContext(object):
 
 @implementer(IConfigurationContext)
 class ConfigurationMachine(ConfigurationContext):
-    """Configuration machine"""
+    """Configuration machine
+    """
 
     def __init__(self):
         super(ConfigurationMachine, self).__init__()
@@ -125,7 +126,8 @@ class ConfigurationMachine(ConfigurationContext):
 
 
 class ConfigurationExecutionError(ConfigurationError):
-    """An error occurred during execution of a configuration action"""
+    """An error occurred during execution of a configuration action
+    """
 
     def __init__(self, etype, evalue):
         self.etype, self.evalue = etype, evalue

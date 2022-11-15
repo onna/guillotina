@@ -82,7 +82,9 @@ class BaseObject:
         "__serial",
         "__volatile",
     )
-    __parent__: Optional[IBaseObject] = ObjectProperty[Optional[IBaseObject]](  # type: ignore
+    __parent__: Optional[IBaseObject] = ObjectProperty[  # type: ignore
+        Optional[IBaseObject]
+    ](
         "_BaseObject__parent", None
     )
     __of__: Optional[IBaseObject] = ObjectProperty[Optional[IBaseObject]](  # type: ignore

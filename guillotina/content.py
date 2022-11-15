@@ -174,7 +174,8 @@ class Resource(guillotina.db.orm.base.BaseObject):
         super(Resource, self).__init__()
 
     def __repr__(self):
-        """ """
+        """
+        """
         path = "/".join(get_physical_path(self))
         return "< {type} at {path} by {mem} >".format(type=self.type_name, path=path, mem=id(self))
 
@@ -388,7 +389,8 @@ class Folder(Resource):
 
 @configure.contenttype(type_name="Container", schema=IContainer)
 class Container(Folder):
-    """ """
+    """
+    """
 
     async def install(self):
         # Creating and registering a local registry

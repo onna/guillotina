@@ -87,7 +87,8 @@ class ITraversable(Interface):
 
 
 class IApplication(IBaseObject, ITraversable, IAsyncContainer):
-    """ """
+    """
+    """
 
     def __contains__(key) -> bool:
         """
@@ -114,22 +115,27 @@ class IDatabase(ITraversable, IAsyncContainer):
     __db_id__ = Attribute("")
 
     def get_transaction_manager() -> ITransactionManager:
-        """ """
+        """
+        """
 
     def open():  # type: ignore
-        """ """
+        """
+        """
 
 
 class IStaticFile(Interface):
-    """ """
+    """
+    """
 
 
 class IStaticDirectory(ITraversable):
-    """ """
+    """
+    """
 
 
 class IJavaScriptApplication(IStaticDirectory):
-    """ """
+    """
+    """
 
 
 class ILocation(Interface):
@@ -223,7 +229,8 @@ class IResourceFactory(IFactory):
 
 
 class IFolder(IResource, IAsyncContainer, ITraversable):
-    """ """
+    """
+    """
 
 
 class IContainer(IResource, IAsyncContainer, ITraversable, IComponentSite):
@@ -235,15 +242,18 @@ class IContainer(IResource, IAsyncContainer, ITraversable, IComponentSite):
 
 
 class IItem(IResource):
-    """ """
+    """
+    """
 
 
 class IAnnotationData(IBaseObject, IEnumerableMapping):
-    """ """
+    """
+    """
 
 
 class IAnnotations(Interface):
-    """ """
+    """
+    """
 
     def get(name, default: Optional[Any] = None):
         """

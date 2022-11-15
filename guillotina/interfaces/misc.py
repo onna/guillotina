@@ -54,10 +54,12 @@ class IAbsoluteURL(Interface):
 
 class IAddOn(Interface):
     def install(container, request):  # noqa: N805
-        """ """
+        """
+        """
 
     def uninstall(container, request):  # noqa: N805
-        """ """
+        """
+        """
 
 
 class IIDChecker(Interface):

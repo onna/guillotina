@@ -92,4 +92,5 @@ class DynamicDictUpdate(PatchDictUpdate):
 
 @configure.adapter(for_=IDict, provides=IDynamicFieldOperation, name="del")
 class DynamicDictDel(PatchDictDel):
-    """ """
+    """
+    """

@@ -31,6 +31,7 @@ try:
                 counter=REDIS_OPS, histogram=REDIS_OPS_PROCESSING_TIME, labels={"type": operation}
             )
 
+
 except ImportError:
     watch = metrics.dummy_watch  # type: ignore
 

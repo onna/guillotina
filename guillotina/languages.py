@@ -12,22 +12,26 @@ class DefaultLanguage:
 
 @configure.language(name="en")
 class EN(DefaultLanguage):
-    """ """
+    """
+    """
 
 
 @configure.language(name="ca")
 class CA(DefaultLanguage):
-    """ """
+    """
+    """
 
 
 @configure.language(name="fi")
 class FI(DefaultLanguage):
-    """ """
+    """
+    """
 
 
 @configure.language(name="en-us")
 class ENUS(DefaultLanguage):
-    """ """
+    """
+    """
 
 
 # This is a dictionary of dictonaries:

@@ -347,7 +347,8 @@ def _fields(values):
 
 
 class IURI(INativeStringLine):
-    """A field containing an absolute URI"""
+    """A field containing an absolute URI
+    """
 
 
 class IId(INativeStringLine):
@@ -453,7 +454,8 @@ class IList(ISequence):
 
 
 class ISet(IAbstractSet):
-    """Field containing a value that implements the API of a Python2.4+ set."""
+    """Field containing a value that implements the API of a Python2.4+ set.
+    """
 
 
 class IFrozenSet(IAbstractSet):
@@ -491,7 +493,8 @@ class ITerm(Interface):
 
 
 class ITokenizedTerm(ITerm):
-    """Object representing a single value in a tokenized vocabulary."""
+    """Object representing a single value in a tokenized vocabulary.
+    """
 
     # Should be a ``guillotina.schema.ASCIILine``, but `ASCIILine` is not a bootstrap
     # field.
@@ -522,11 +525,13 @@ class ISource(Interface):
     """
 
     def __contains__(value):
-        """Return whether the value is available in this source"""
+        """Return whether the value is available in this source
+        """
 
 
 class ISourceQueriables(Interface):
-    """A collection of objects for querying sources"""
+    """A collection of objects for querying sources
+    """
 
     def getQueriables():  # type: ignore
         """Return an iterable of objects that can be queried
@@ -550,7 +555,8 @@ class ISourceQueriables(Interface):
 
 class IContextSourceBinder(Interface):
     def __call__(context):
-        """Return a context-bound instance that implements ISource."""
+        """Return a context-bound instance that implements ISource.
+        """
 
 
 class IBaseVocabulary(ISource):
@@ -619,14 +625,15 @@ class IVocabularyTokenized(IVocabulary):
 class ITreeVocabulary(IVocabularyTokenized, IEnumerableMapping):
     """A tokenized vocabulary with a tree-like structure.
 
-    The tree is implemented as dictionary, with keys being ITokenizedTerm
-    terms and the values being similar dictionaries. Leaf values are empty
-    dictionaries.
+       The tree is implemented as dictionary, with keys being ITokenizedTerm
+       terms and the values being similar dictionaries. Leaf values are empty
+       dictionaries.
     """
 
 
 class IVocabularyRegistry(Interface):
-    """Registry that provides IBaseVocabulary objects for specific fields."""
+    """Registry that provides IBaseVocabulary objects for specific fields.
+    """
 
     def get(object, name):
         """Return the vocabulary named 'name' for the content object
@@ -640,7 +647,8 @@ class IVocabularyFactory(Interface):
     """Can create vocabularies."""
 
     def __call__(context):
-        """The context provides a location that the vocabulary can make use of."""
+        """The context provides a location that the vocabulary can make use of.
+        """
 
 
 class IFieldEvent(Interface):

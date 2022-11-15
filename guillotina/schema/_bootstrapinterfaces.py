@@ -23,7 +23,8 @@ class IFromUnicode(zope.interface.Interface):
     """
 
     def from_unicode(str):
-        """Convert a unicode string to a value."""
+        """Convert a unicode string to a value.
+        """
 
 
 class IContextAwareDefaultFactory(zope.interface.Interface):

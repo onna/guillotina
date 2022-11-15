@@ -4,7 +4,8 @@ from zope.interface.interfaces import IInterface
 
 
 def provide_interface(id, interface, iface_type=None, info=""):
-    """Mark 'interface' as a named utilty providing 'iface_type'."""
+    """ Mark 'interface' as a named utilty providing 'iface_type'.
+    """
     if not id:
         id = "%s.%s" % (interface.__module__, interface.__name__)
 

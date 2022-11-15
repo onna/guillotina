@@ -27,7 +27,8 @@ class AnnotationData(BaseObject, UserDict):
 @configure.adapter(for_=IRegistry, provides=IAnnotations)
 @configure.adapter(for_=IResource, provides=IAnnotations)
 class AnnotationsAdapter:
-    """Store annotations on an object"""
+    """Store annotations on an object
+    """
 
     def __init__(self, obj):
         self.obj = obj

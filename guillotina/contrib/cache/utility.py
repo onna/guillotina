@@ -36,6 +36,7 @@ try:
     def record_size_metric(size: int) -> None:
         CACHE_RECORD_SIZE.observe(size)
 
+
 except ImportError:
 
     def record_size_metric(size: int) -> None:

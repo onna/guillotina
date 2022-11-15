@@ -63,7 +63,8 @@ class TransactionManager:
 
     @profilable
     async def begin(self, read_only: bool = False) -> ITransaction:
-        """Starts a new transaction."""
+        """Starts a new transaction.
+        """
         # already has txn registered, as long as connection is closed, it
         # is safe
         txn: typing.Optional[ITransaction] = task_vars.txn.get()
@@ -99,7 +100,8 @@ class TransactionManager:
         return await shield(self._commit(txn=txn))
 
     async def _commit(self, *, txn: typing.Optional[ITransaction] = None) -> None:
-        """Commit the last transaction"""
+        """ Commit the last transaction
+        """
         if txn is None:
             txn = self.get()
         if txn is not None:
@@ -130,7 +132,8 @@ class TransactionManager:
             pass
 
     async def _abort(self, *, txn: typing.Optional[ITransaction] = None):
-        """Abort the last transaction"""
+        """ Abort the last transaction
+        """
         if txn is None:
             txn = self.get()
         if txn is not None:
@@ -138,7 +141,8 @@ class TransactionManager:
         await self._close_txn(txn)
 
     def get(self) -> typing.Optional[ITransaction]:
-        """Return the current request specific transaction"""
+        """Return the current request specific transaction
+        """
         return task_vars.txn.get()
 
     def transaction(self, **kwargs):

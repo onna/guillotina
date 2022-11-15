@@ -2,7 +2,8 @@ from zope.interface import Interface
 
 
 class IMailer(Interface):
-    """ """
+    """
+    """
 
     def __init__(settings):
         pass

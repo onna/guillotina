@@ -342,11 +342,13 @@ class IDGenerator(object):
 
 
 class IMemoryFileField(IFileField):
-    """ """
+    """
+    """
 
 
 class IInMemoryCloudFile(IFile):
-    """ """
+    """
+    """
 
 
 @configure.adapter(for_=(dict, IMemoryFileField), provides=IJSONToValue)

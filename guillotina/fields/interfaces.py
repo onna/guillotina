@@ -31,4 +31,5 @@ class IPatchFieldOperation(Interface):
 
 
 class IDynamicFieldOperation(IPatchFieldOperation):
-    """ """
+    """
+    """

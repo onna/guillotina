@@ -121,6 +121,7 @@ try:
                 error_mappings={"timeout": asyncio.TimeoutError, "cancelled": asyncio.CancelledError},
             )
 
+
 except ImportError:
     _SEND_METRICS = False
     watch = metrics.dummy_watch  # type: ignore

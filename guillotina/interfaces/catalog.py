@@ -37,13 +37,16 @@ class ICatalogUtility(Interface):
         """
 
     async def reindex_all_content(context: IBaseObject, security=False):
-        """For all content add a queue task that reindex the object"""
+        """ For all content add a queue task that reindex the object
+        """
 
     async def initialize_catalog(container: IContainer):
-        """Creates an index"""
+        """ Creates an index
+        """
 
     async def remove_catalog(container: IContainer):
-        """Deletes an index"""
+        """ Deletes an index
+        """
 
     async def get_data(content, indexes=None, schemas=None):
         """
@@ -59,7 +62,8 @@ class IPGCatalogUtility(ICatalogUtility):
 
 class ISearchParser(Interface):
     def __init__(utility: ICatalogUtility, context: Interface):
-        """ """
+        """
+        """
 
     def __call__() -> typing.Any:
         """
@@ -68,7 +72,8 @@ class ISearchParser(Interface):
 
 
 class ICatalogDataAdapter(Interface):
-    """ """
+    """
+    """
 
     async def __call__(indexes=None, schemas=None):
         """
@@ -77,7 +82,8 @@ class ICatalogDataAdapter(Interface):
 
 
 class ISecurityInfo(Interface):
-    """ """
+    """
+    """
 
     async def __call__(indexes=None, schemas=None):
         """
