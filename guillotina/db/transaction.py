@@ -121,7 +121,7 @@ class cache:
             # For cacheable requests containing an oid as part of the
             # key parameters, double check that the TID in cache
             # matches the TID in the database.
-            if result is not None and oid is not None and result["type"] not in TID_VERIFY_SKIP:
+            if result is not None and oid is not None and result.get("type") not in TID_VERIFY_SKIP:
                 expected_tid = None
                 try:
                     expected_tid = await self._manager._storage.get_obj_tid(self, oid)
