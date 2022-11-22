@@ -143,7 +143,13 @@ class BasicCache(BaseCache):
 
     async def fill_cache(self):
         for obj, pickled in self._stored_objects:
-            val = {"state": pickled, "zoid": obj.__uuid__, "tid": obj.__serial__, "id": obj.__name__, "type": obj.type_name}
+            val = {
+                "state": pickled,
+                "zoid": obj.__uuid__,
+                "tid": obj.__serial__,
+                "id": obj.__name__,
+                "type": getattr(obj, "type_name", None),
+            }
             if obj.__of__:
                 await self.set(
                     val, [dict(oid=obj.__of__, id=obj.__name__, variant="annotation"), dict(oid=obj.__uuid__)]
@@ -170,7 +176,13 @@ class BasicCache(BaseCache):
         push = {}
         if self.push_enabled:
             for obj, pickled in self._stored_objects:
-                val = {"state": pickled, "zoid": obj.__uuid__, "tid": obj.__serial__, "id": obj.__name__, "type": obj.type_name}
+                val = {
+                    "state": pickled,
+                    "zoid": obj.__uuid__,
+                    "tid": obj.__serial__,
+                    "id": obj.__name__,
+                    "type": getattr(obj, "type_name", None),
+                }
                 if obj.__of__:
                     ob_key = self.get_key(oid=obj.__of__, id=obj.__name__, variant="annotation")
                 else:
