@@ -12,6 +12,7 @@ from guillotina.utils import resolve_dotted_name
 from sys import getsizeof
 from typing import List
 from typing import Optional
+from emcache.client_errors import NotFoundCommandError
 
 import asyncio
 import asyncpg
@@ -106,7 +107,8 @@ class CacheUtility:
                     logger.debug("Retrieved {} from cache".format(key))
                     val = serialize.loads(val)
                     size = self.get_size(val)
-                    self._memory_cache.set(key, val, size)
+                    if memcache.is_memory_cacheable(val):
+                        self._memory_cache.set(key, val, size)
                     return val
         except Exception:
             logger.warning("Error getting cache value", exc_info=True)
@@ -131,14 +133,18 @@ class CacheUtility:
         for key in keys:
             record_size_metric(size)
             try:
-                self._memory_cache.set(key, value, in_memory_size)
-                record_memory_op("set", "none")
+                if memcache.is_memory_cacheable(value):
+                    # Only set memory cache if object is memory cacheable
+                    logger.debug("Setting {} in memory cache".format(key))
+                    self._memory_cache.set(key, value, in_memory_size)
+                    record_memory_op("set", "none")
+
                 if ttl is None:
                     ttl = self._settings.get("ttl", 3600)
                 if self._obj_driver is not None:
                     stored_value = serialize.dumps(value)
                     await self._obj_driver.set(CACHE_PREFIX + key, stored_value, expire=ttl)
-                logger.debug("set {} in cache".format(key))
+                logger.debug("set {} in object cache".format(key))
             except Exception:
                 logger.warning("Error setting cache value", exc_info=True)
             in_memory_size = 0  # additional keys to set have 0 size in in-memory cache
@@ -165,6 +171,8 @@ class CacheUtility:
                 record_memory_op("delete", "miss")
             if self._obj_driver is not None:
                 await self._obj_driver.delete(key)
+        except NotFoundCommandError:
+            logger.debug("Key not found {}, nothing to delete".format(key))
         except Exception:
             logger.warning("Error removing from cache", exc_info=True)
 
@@ -203,7 +211,8 @@ class CacheUtility:
         push = data.get("push", {})
         if isinstance(push, dict):
             for cache_key, ob in push.items():
-                self._memory_cache.set(cache_key, ob, self.get_size(ob))
+                if memcache.is_memory_cacheable(ob):
+                    self._memory_cache.set(cache_key, ob, self.get_size(ob))
 
         # clean up possible memory leak
         while len(self._ignored_tids) > 100:

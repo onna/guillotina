@@ -1,3 +1,5 @@
+from emcache.client_errors import NotFoundCommandError
+
 try:
     import emcache
 except ImportError:
@@ -118,7 +120,10 @@ try:
                 counter=MEMCACHED_OPS,
                 histogram=MEMCACHED_OPS_PROCESSING_TIME,
                 labels={"type": operation},
-                error_mappings={"timeout": asyncio.TimeoutError, "cancelled": asyncio.CancelledError},
+                error_mappings={
+                    "timeout": asyncio.TimeoutError,
+                    "cancelled": asyncio.CancelledError,
+                },  # type: ignore
             )
 
 
@@ -238,7 +243,7 @@ class MemcachedDriver:
     async def delete(self, key: str) -> None:
         client = self._get_client()
         with watch("delete"):
-            await client.delete(safe_key(key), noreply=True)
+            await client.delete(safe_key(key), noreply=False)
 
     async def delete_all(self, keys: List[str]) -> None:
         if len(keys) == 0:
@@ -252,8 +257,10 @@ class MemcachedDriver:
             for key in keys:
                 try:
                     with watch("delete"):
-                        await client.delete(safe_key(key), noreply=True)
+                        await client.delete(safe_key(key), noreply=False)
                     logger.debug("Deleted cache keys {}".format(keys))
+                except NotFoundCommandError:
+                    logger.debug("Key not found {}, nothing to delete".format(keys))
                 except Exception:
                     logger.warning("Error deleting cache keys {}".format(keys), exc_info=True)
 

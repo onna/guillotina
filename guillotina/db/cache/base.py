@@ -3,7 +3,6 @@ from guillotina.db.orm.interfaces import IBaseObject
 from typing import Any
 from typing import Dict
 from typing import List
-
 import typing
 
 
@@ -103,12 +102,13 @@ class BaseCache:
         keys = []
 
         if ob.__of__:
-            # like an annotiation, invalidate diff
+            # like an annotation, invalidate diff
             keys = [
                 self.get_key(oid=ob.__uuid__),
                 self.get_key(oid=ob.__of__, id=ob.__name__, variant="annotation"),
                 self.get_key(oid=ob.__of__, variant="annotation-keys"),
             ]
+
         else:
             if type_ == "modified":
                 keys = [self.get_key(oid=ob.__uuid__), self.get_key(container=ob.__parent__, id=ob.id)]

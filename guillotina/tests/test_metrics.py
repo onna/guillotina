@@ -208,6 +208,7 @@ class TestTransactionMetrics:
         storage = AsyncMock()
         mng = TransactionManager(storage)
         cache = AsyncMock()
+
         cache.get.return_value = {
             "state": pickle.dumps(create_content()),
             "zoid": "foobar",
@@ -217,6 +218,7 @@ class TestTransactionMetrics:
         strategy = AsyncMock()
         txn = Transaction(mng, cache=cache, strategy=strategy)
 
+        mng._storage.get_obj_tid.return_value = 1
         await txn.get("foobar")
 
         assert (
@@ -238,6 +240,7 @@ class TestTransactionMetrics:
         strategy = AsyncMock()
         txn = Transaction(mng, cache=cache, strategy=strategy)
 
+        mng._storage.get_obj_tid.return_value = 1
         await txn.get("foobar")
 
         assert (
@@ -265,6 +268,7 @@ class TestTransactionMetrics:
         strategy = AsyncMock()
         txn = Transaction(mng, cache=cache, strategy=strategy)
 
+        mng._storage.get_obj_tid.return_value = 1
         await txn.get("foobar")
 
         assert (

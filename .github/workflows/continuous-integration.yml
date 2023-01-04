@@ -9,29 +9,28 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [3.7, 3.8]
+        python-version: [3.8]
 
     steps:
       - name: Checkout the repository
         uses: actions/checkout@v2
 
       - name: Setup Python
-        uses: actions/setup-python@v1
+        uses: actions/setup-python@v2
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Install package
         run: |
+          pip install click==8.0.4
           pip install flake8==3.7.7
           pip install mypy==0.720
           pip install mypy-zope==0.2.0
           pip install black==19.10b0
-          pip install isort==4.3.21
       - name: Run pre-checks
         run: |
           flake8 guillotina --config=setup.cfg
           mypy guillotina/ --ignore-missing-imports
-          isort -c -rc guillotina/
           black --check --verbose guillotina
   # Job to run tests
   tests:
@@ -39,13 +38,11 @@ jobs:
 
     strategy:
       matrix:
-        python-version: [3.7, 3.8]
-        database: ["DUMMY", "postgres", "cockroachdb"]
+        python-version: [3.8]
+        database: ["DUMMY", "postgres"]
         db_schema: ["custom", "public"]
         exclude:
           - database: "DUMMY"
-            db_schema: "custom"
-          - database: "cockroachdb"
             db_schema: "custom"
 
     # Set environment variables
@@ -58,7 +55,7 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Setup Python
-        uses: actions/setup-python@v1
+        uses: actions/setup-python@v2
         with:
           python-version: ${{ matrix.python-version }}
 

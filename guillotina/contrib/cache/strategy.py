@@ -8,6 +8,8 @@ from guillotina.exceptions import NoChannelConfigured
 from guillotina.exceptions import NoPubSubUtility
 from guillotina.interfaces import ICacheUtility
 from guillotina.profile import profilable
+from guillotina.contrib.cache.memcache import is_memory_cacheable
+
 from typing import Any
 from typing import Dict
 from typing import List
@@ -94,6 +96,7 @@ class BasicCache(BaseCache):
         invalidated = []
         for data, type_ in groups:
             for oid, ob in data.items():
+
                 invalidated.extend(self.get_cache_keys(ob, type_))
         return invalidated
 
@@ -192,10 +195,39 @@ class BasicCache(BaseCache):
                         ob_key = self.get_key(oid=obj.__uuid__)
                 push[ob_key] = val
 
+        # Determine which objects should not be published
+        keys_to_not_publish = []
+        for obj, pickled in self._stored_objects:
+            if not is_memory_cacheable(obj):
+                keys_to_not_publish.append(self.get_key(oid=obj.__uuid__))
+
+                if obj.__of__:
+                    if not app_settings["cache"].get("invalidate_annotations", True):
+                        keys_to_not_publish.append(
+                            self.get_key(oid=obj.__of__, id=obj.__name__, variant="annotation")
+                        )
+                        keys_to_not_publish.append(self.get_key(oid=obj.__of__, variant="annotation-keys"))
+                else:
+                    if obj.__parent__:
+                        keys_to_not_publish.append(self.get_key(container=obj.__parent__, id=obj.__name__))
+                    else:
+                        keys_to_not_publish.append(self.get_key(oid=obj.__uuid__))
+
         self._stored_objects.clear()
         self._utility.ignore_tid(self._transaction._tid)
+
+        keys = [x for x in keys_to_publish if x not in keys_to_not_publish]
+
+        if not keys:
+            # Nothing to publish
+            return
+
         await self._utility._subscriber.publish(
             app_settings["cache"]["updates_channel"],
             self._transaction._tid,
-            {"tid": self._transaction._tid, "keys": keys_to_publish, "push": push},
+            {
+                "tid": self._transaction._tid,
+                "keys": [x for x in keys_to_publish if x not in keys_to_not_publish],
+                "push": push,
+            },
         )

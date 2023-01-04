@@ -103,7 +103,7 @@ class SwaggerDefinitionService(Service):
                             tags = iface_conf["endpoints"][name][http_method]["tags"]
                             break
                     self.get_endpoints(
-                        iface_conf["endpoints"][name], os.path.join(base_path, name), api_def, tags=tags,
+                        iface_conf["endpoints"][name], os.path.join(base_path, name), api_def, tags=tags
                     )
             else:
                 if method.lower() == "options":
