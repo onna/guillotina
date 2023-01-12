@@ -5,6 +5,7 @@ import pickle
 import struct
 import typing
 
+
 PICKLE_PREFIXES = [
     pickle.PROTO + struct.pack("<B", pickle.HIGHEST_PROTOCOL),
     pickle.PROTO + struct.pack("<B", pickle.DEFAULT_PROTOCOL),
