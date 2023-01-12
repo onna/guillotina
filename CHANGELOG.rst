@@ -1,5 +1,10 @@
 CHANGELOG
-=========
+=======
+5.4.5 (2023-01-13)
+-------------------
+
+- make some Dublin Core Metadata fields readonly
+
 5.4.4 (2023-01-12)
 -------------------
 

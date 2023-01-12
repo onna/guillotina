@@ -27,25 +27,31 @@ class IDublinCore(Interface):
     index_field("contributors", type="keyword")
 
     title = schema.TextLine(
-        title="Title", description="The first unqualified Dublin Core 'Title' element value.", required=False
+        title="Title",
+        description="The first unqualified Dublin Core 'Title' element value.",
+        required=False,
+        readonly=True,
     )
 
     description = schema.Text(
         title="Description",
         description="The first unqualified Dublin Core 'Description' element value.",
         required=False,
+        readonly=True,
     )
 
     creation_date = schema.Datetime(
         title="Creation Date",
         description="The date and time that an object is created. " "\nThis is normally set automatically.",
         required=False,
+        readonly=True,
     )
 
     modification_date = schema.Datetime(
         title="Modification Date",
         description="The date and time that the object was last modified in a\n" "meaningful way.",
         required=False,
+        readonly=True,
     )
 
     effective_date = schema.Datetime(
@@ -67,6 +73,7 @@ class IDublinCore(Interface):
         required=False,
         naive=True,
         max_length=1000,
+        readonly=True,
     )
 
     tags = PatchField(
