@@ -365,12 +365,14 @@ class TestTransactionMetrics:
         txn = Transaction(mng, cache=cache, strategy=strategy)
 
         ob = create_content(Container)
+
+        mng._storage.get_annotation.return_value = transaction._EMPTY
         with pytest.raises(KeyError):
             await txn.get_annotation(ob, "foobar")
 
         assert (
             metrics_registry.get_sample_value(
-                "guillotina_cache_ops_total", {"type": "_get_annotation", "result": "hit_empty"}
+                "guillotina_cache_ops_total", {"type": "_get_annotation", "result": "miss_empty"}
             )
             == 1.0
         )
