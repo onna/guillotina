@@ -322,6 +322,8 @@ class TestTransactionMetrics:
         txn = Transaction(mng, cache=cache, strategy=strategy)
 
         ob = create_content()
+        mng._storage.get_obj_tid.return_value = 1
+
         await txn.get_child(ob, "foobar")
 
         assert (
@@ -346,6 +348,8 @@ class TestTransactionMetrics:
         txn = Transaction(mng, cache=cache, strategy=strategy)
 
         ob = create_content(Container)
+        mng._storage.get_obj_tid.return_value = 1
+
         await txn.get_child(ob, "foobar")
 
         assert (

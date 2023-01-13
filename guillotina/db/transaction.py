@@ -112,6 +112,8 @@ class cache:
             result = await self._cache.get(**key_args)
             if not isinstance(result, dict) and not isinstance(result, asyncpg.Record):
                 result = None
+            elif oid is None:
+                oid = result["zoid"]
 
             # For cacheable requests containing an oid as part of the
             # key parameters, double check that the TID in cache
