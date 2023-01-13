@@ -42,14 +42,12 @@ class IDublinCore(Interface):
         title="Creation Date",
         description="The date and time that an object is created. " "\nThis is normally set automatically.",
         required=False,
-        readonly=True,
     )
 
     modification_date = schema.Datetime(
         title="Modification Date",
         description="The date and time that the object was last modified in a\n" "meaningful way.",
         required=False,
-        readonly=True,
     )
 
     effective_date = schema.Datetime(
