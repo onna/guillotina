@@ -40,7 +40,7 @@ async def cleanup(aps):
 async def get_aps(postgres, pool_size=16, autovacuum=True):
     dsn = "postgres://postgres:@{}:{}/guillotina".format(postgres[0], postgres[1])
     klass = PostgresqlStorage
-    aps = klass(dsn=dsn, name="db", pool_size=pool_size, conn_acquire_timeout=0.1, autovacuum=autovacuum,)
+    aps = klass(dsn=dsn, name="db", pool_size=pool_size, conn_acquire_timeout=0.1, autovacuum=autovacuum)
     await aps.initialize()
     return aps
 

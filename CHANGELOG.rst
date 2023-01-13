@@ -1,5 +1,11 @@
 CHANGELOG
 =========
+5.4.4 (2023-01-12)
+-------------------
+
+- Allow annotations and resource types to not be stored in memory
+- Fix CI/tests
+
 5.4.3 (2022-11-13)
 ------------------
 

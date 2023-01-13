@@ -36,12 +36,7 @@ import time
 
 
 _EMPTY = "__<EMPTY VALUE>__"
-TID_VERIFY_SKIP = {
-    "Container",
-    "guillotina.db.db.Root",
-    "guillotina.registry.Registry",
-    "User",
-}
+TID_VERIFY_SKIP = {"Container", "guillotina.db.db.Root", "guillotina.registry.Registry", "User"}
 
 
 class ObjectResultType(TypedDict, total=False):
@@ -115,8 +110,10 @@ class cache:
             oid = key_args.get("oid")
 
             result = await self._cache.get(**key_args)
-            if not isinstance(result, dict):
+            if not isinstance(result, dict) and not isinstance(result, asyncpg.Record):
                 result = None
+            elif oid is None:
+                oid = result["zoid"]
 
             # For cacheable requests containing an oid as part of the
             # key parameters, double check that the TID in cache
@@ -170,9 +167,7 @@ class Transaction:
     _skip_commit = False
     user = None
 
-    def __init__(
-        self, manager, loop=None, read_only: bool = False, cache=None, strategy=None,
-    ):
+    def __init__(self, manager, loop=None, read_only: bool = False, cache=None, strategy=None):
         # Transaction Manager
         self._manager = manager
 
@@ -190,9 +185,7 @@ class Transaction:
         # which would correspond with one connection
         self._lock = asyncio.Lock(loop=loop)
 
-    def initialize(
-        self, read_only, cache=None, strategy=None,
-    ):
+    def initialize(self, read_only, cache=None, strategy=None):
         self._read_only = read_only
         self._txn_time = None
         self._tid = None

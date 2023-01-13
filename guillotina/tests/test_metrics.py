@@ -208,6 +208,7 @@ class TestTransactionMetrics:
         storage = AsyncMock()
         mng = TransactionManager(storage)
         cache = AsyncMock()
+
         cache.get.return_value = {
             "state": pickle.dumps(create_content()),
             "zoid": "foobar",
@@ -217,6 +218,7 @@ class TestTransactionMetrics:
         strategy = AsyncMock()
         txn = Transaction(mng, cache=cache, strategy=strategy)
 
+        mng._storage.get_obj_tid.return_value = 1
         await txn.get("foobar")
 
         assert (
@@ -238,6 +240,7 @@ class TestTransactionMetrics:
         strategy = AsyncMock()
         txn = Transaction(mng, cache=cache, strategy=strategy)
 
+        mng._storage.get_obj_tid.return_value = 1
         await txn.get("foobar")
 
         assert (
@@ -265,6 +268,7 @@ class TestTransactionMetrics:
         strategy = AsyncMock()
         txn = Transaction(mng, cache=cache, strategy=strategy)
 
+        mng._storage.get_obj_tid.return_value = 1
         await txn.get("foobar")
 
         assert (
@@ -318,6 +322,8 @@ class TestTransactionMetrics:
         txn = Transaction(mng, cache=cache, strategy=strategy)
 
         ob = create_content()
+        mng._storage.get_obj_tid.return_value = 1
+
         await txn.get_child(ob, "foobar")
 
         assert (
@@ -342,6 +348,8 @@ class TestTransactionMetrics:
         txn = Transaction(mng, cache=cache, strategy=strategy)
 
         ob = create_content(Container)
+        mng._storage.get_obj_tid.return_value = 1
+
         await txn.get_child(ob, "foobar")
 
         assert (
@@ -361,12 +369,14 @@ class TestTransactionMetrics:
         txn = Transaction(mng, cache=cache, strategy=strategy)
 
         ob = create_content(Container)
+
+        mng._storage.get_annotation.return_value = transaction._EMPTY
         with pytest.raises(KeyError):
             await txn.get_annotation(ob, "foobar")
 
         assert (
             metrics_registry.get_sample_value(
-                "guillotina_cache_ops_total", {"type": "_get_annotation", "result": "hit_empty"}
+                "guillotina_cache_ops_total", {"type": "_get_annotation", "result": "miss_empty"}
             )
             == 1.0
         )

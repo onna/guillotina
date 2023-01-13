@@ -110,6 +110,9 @@ class MockStorage:  # type: ignore
     async def commit(self, txn):
         pass
 
+    async def get_obj_tid(self, txn, oid):
+        pass
+
     async def load(self, txn, oid):
         return self._objects[oid]
 
