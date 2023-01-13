@@ -27,9 +27,7 @@ class IDublinCore(Interface):
     index_field("contributors", type="keyword")
 
     title = schema.TextLine(
-        title="Title",
-        description="The first unqualified Dublin Core 'Title' element value.",
-        required=False,
+        title="Title", description="The first unqualified Dublin Core 'Title' element value.", required=False,
     )
 
     description = schema.Text(
