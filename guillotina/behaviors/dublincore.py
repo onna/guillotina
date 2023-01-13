@@ -30,14 +30,12 @@ class IDublinCore(Interface):
         title="Title",
         description="The first unqualified Dublin Core 'Title' element value.",
         required=False,
-        readonly=True,
     )
 
     description = schema.Text(
         title="Description",
         description="The first unqualified Dublin Core 'Description' element value.",
         required=False,
-        readonly=True,
     )
 
     creation_date = schema.Datetime(
