@@ -82,7 +82,6 @@ async def test_selective_object_invalidation_types(redis_container, guillotina_m
     await rcache.close(invalidate=True)
     await rcache.clear()
 
-    # # Removed
     assert f"root-{content.__uuid__}" not in util._memory_cache
 
     # Now disable memory cache for resources, object is not in memory
