@@ -16,8 +16,10 @@ class MigrateCommand(Command):
 
     async def migrate(self, db):
         migrations = sorted(get_utilities_for(IMigration), key=lambda v: StrictVersion(v[0]))
-        root = await db.get_root()
-        current_version = StrictVersion(root.migration_version)
+        async with transaction(db=db) as txn:
+            txn._manager._hard_cache.clear()
+            root = await db.get_root()
+            current_version = StrictVersion(root.migration_version)
         for version, migration in migrations:
             if StrictVersion(version) > current_version:
                 async with transaction(db=db) as txn:
