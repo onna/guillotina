@@ -16,18 +16,17 @@ class MigrateCommand(Command):
 
     async def migrate(self, db):
         migrations = sorted(get_utilities_for(IMigration), key=lambda v: StrictVersion(v[0]))
-        async with transaction(db=db) as txn:
-            # make sure to get fresh copy
-            txn._manager._hard_cache.clear()
-            root = await db.get_root()
-            current_version = StrictVersion(root.migration_version)
-            for version, migration in migrations:
-                if StrictVersion(version) > current_version:
+        root = await db.get_root()
+        current_version = StrictVersion(root.migration_version)
+        for version, migration in migrations:
+            if StrictVersion(version) > current_version:
+                async with transaction(db=db) as txn:
+                    txn._manager._hard_cache.clear()
                     logger.warning(f"Starting migration on db {version}: {db.id}")
                     await migration(db)
                     logger.warning(f"Finished migration on db {version}: {db.id}")
                     root.migration_version = version
-            txn.register(root)
+                    txn.register(root)
 
     async def run(self, arguments, settings, app):
         async for db in iter_databases():

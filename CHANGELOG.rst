@@ -1,5 +1,10 @@
 CHANGELOG
 =========
+5.4.5 (2023-01-24)
+------------------
+
+- Perform each migration in a separate transaction
+
 5.4.4 (2023-01-12)
 -------------------
 
