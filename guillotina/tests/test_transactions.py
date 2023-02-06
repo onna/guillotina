@@ -136,3 +136,19 @@ async def test_register_duplicate_object_oid(guillotina_main):
         txn.register(utils.create_content(uid="foobar"))
         with pytest.raises(TransactionObjectRegistrationMismatchException):
             txn.register(utils.create_content(uid="foobar"))
+
+async def test_managed_transaction_aborted_on_exception(container_requester):
+    async with container_requester as requester:
+        with pytest.raises(Exception):
+            async with transaction(db=requester.db) as txn:
+                root = await txn.get(ROOT_ID)
+                container = await root.async_get("guillotina")
+                container.title = "changed title"
+                container.register()
+
+                raise Exception()
+
+        async with transaction(db=requester.db) as txn:
+            root = await txn.get(ROOT_ID)
+            container = await root.async_get("guillotina")
+            assert container.title == "Guillotina Container"
