@@ -1,5 +1,10 @@
 CHANGELOG
 =========
+5.4.6 (2023-02-07)
+------------------
+
+- Abort transactions if an exception is raised
+
 5.4.5 (2023-01-24)
 ------------------
 
