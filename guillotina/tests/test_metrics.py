@@ -151,7 +151,7 @@ class TestPGMetrics:
         txn = self._make_txn()
         txn.get_connection.return_value.fetch.return_value = [{"count": 1}]
         writer = AsyncMock()
-        writer.serialize = AsyncMock(return_value=b'test')
+        writer.serialize = AsyncMock(return_value=b"test")
         await storage.store("foobar", 1, writer, ob, txn)
         assert (
             metrics_registry.get_sample_value(
