@@ -11,7 +11,7 @@ from guillotina.db.storages.pg import PostgresqlStorage
 from guillotina.db.transaction import Transaction
 from guillotina.db.transaction_manager import TransactionManager
 from guillotina.tests.utils import create_content
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, AsyncMock
 
 import asyncio
 import pickle
@@ -150,7 +150,7 @@ class TestPGMetrics:
         ob.__serial__ = 1
         txn = self._make_txn()
         txn.get_connection.return_value.fetch.return_value = [{"count": 1}]
-        await storage.store("foobar", 1, MagicMock(), ob, txn)
+        await storage.store("foobar", 1, AsyncMock(), ob, txn)
         assert (
             metrics_registry.get_sample_value(
                 "guillotina_db_pg_ops_total", {"type": "store_object", "error": "none"}

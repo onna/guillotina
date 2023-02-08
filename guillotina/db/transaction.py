@@ -631,7 +631,7 @@ class Transaction:
         if reader is None:
             obj = await app_settings["object_reader"](result)
         else:
-            obj = reader(result)
+            obj = await reader(result)
         obj.__of__ = base_obj.__uuid__
         obj.__txn__ = self
         return obj
