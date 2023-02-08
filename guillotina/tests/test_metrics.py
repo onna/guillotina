@@ -150,7 +150,9 @@ class TestPGMetrics:
         ob.__serial__ = 1
         txn = self._make_txn()
         txn.get_connection.return_value.fetch.return_value = [{"count": 1}]
-        await storage.store("foobar", 1, AsyncMock(), ob, txn)
+        writer = AsyncMock()
+        writer.serialize = AsyncMock(return_value=b'test')
+        await storage.store("foobar", 1, writer, ob, txn)
         assert (
             metrics_registry.get_sample_value(
                 "guillotina_db_pg_ops_total", {"type": "store_object", "error": "none"}
