@@ -1,5 +1,10 @@
 CHANGELOG
 =========
+5.4.6 (2023-02-08)
+------------------
+
+- Make content serialization and deserialization methods asynchronous to support reading state objects from other object storage.
+
 5.4.5 (2023-01-24)
 ------------------
 
