@@ -11,7 +11,7 @@ from guillotina.db.storages.pg import PostgresqlStorage
 from guillotina.db.transaction import Transaction
 from guillotina.db.transaction_manager import TransactionManager
 from guillotina.tests.utils import create_content
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import MagicMock
 
 import asyncio
 import pickle
