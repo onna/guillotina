@@ -145,6 +145,47 @@ async def test_selective_object_invalidation_annotations(redis_container, guillo
 
 
 @pytest.mark.app_settings(DEFAULT_SETTINGS)
+async def test_selective_object_invalidation_registry(
+    redis_container, guillotina_main, loop, container_requester
+):
+    util = get_utility(ICacheUtility)
+    await util.initialize()
+    assert util.initialized
+    assert util._obj_driver is not None
+    assert util._subscriber is not None
+
+    trns = mocks.MockTransaction(mocks.MockTransactionManager())
+    trns.added = trns.deleted = {}
+
+    rcache = BasicCache(trns)
+    await rcache.clear()
+
+    async with container_requester as requester:
+        response, status = await requester("GET", "/db/guillotina/@registry")
+        assert status == 200
+
+        response, status = await requester("GET", "/db/guillotina/")
+        assert status == 200
+        container_uid = response["@uid"]
+
+        # Enable annotation invalidation (default), cache value remains in memory
+        app_settings["cache"]["invalidate_annotations"] = True
+
+        assert f"db-{container_uid}/_registry-annotation" in util._memory_cache
+
+        await rcache.close(invalidate=True)
+        await rcache.clear()
+
+        # Disable annotation invalidation, cache value is not in memory and doesn't require invalidation
+        app_settings["cache"]["invalidate_annotations"] = False
+
+        response, status = await requester("GET", "/db/guillotina/@registry")
+        assert status == 200
+
+        assert f"db-{container_uid}/_registry-annotation" not in util._memory_cache
+
+
+@pytest.mark.app_settings(DEFAULT_SETTINGS)
 async def test_subscriber_invalidates(redis_container, guillotina_main, loop):
     util = get_utility(ICacheUtility)
     await util.initialize()
