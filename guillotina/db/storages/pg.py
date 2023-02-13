@@ -18,6 +18,7 @@ from guillotina.exceptions import ConflictError
 from guillotina.exceptions import ConflictIdOnContainer
 from guillotina.exceptions import TIDConflictError
 from guillotina.profile import profilable
+from guillotina.utils.content import get_object_by_uid
 from zope.interface import implementer
 
 import asyncio
@@ -1016,7 +1017,7 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
         return TransactionConnectionContextManager(self, txn)
 
     async def delete(self, txn, oid):
-        obj = await txn.get(oid)
+        obj = await get_object_by_uid(oid)
         writer = query_adapter(obj, IWriter)
         sql = self._sql.get("TRASH_PARENT_ID", self._objects_table_name)
         async with self.acquire(txn) as conn:
