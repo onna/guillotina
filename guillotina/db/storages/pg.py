@@ -5,6 +5,7 @@ from guillotina._settings import app_settings
 from guillotina.const import TRASHED_ID
 from guillotina.db.events import StorageCreatedEvent
 from guillotina.db.interfaces import IPostgresStorage
+from guillotina.db.interfaces import IWriter
 from guillotina.db.storages.base import BaseStorage
 from guillotina.db.storages.utils import clear_table_name
 from guillotina.db.storages.utils import get_table_definition
@@ -291,6 +292,7 @@ register_sql(
 UPDATE {{table_name}}
 SET
     parent_id = '{TRASHED_ID}'
+    state = CASE WHEN state != ''::bytea THEN state ELSE $2 END
 WHERE
     zoid = $1::varchar({MAX_UID_LENGTH})
 """,
@@ -1013,11 +1015,13 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
         return TransactionConnectionContextManager(self, txn)
 
     async def delete(self, txn, oid):
+        obj = await txn.get(oid)
+        writer = IWriter(obj)
         sql = self._sql.get("TRASH_PARENT_ID", self._objects_table_name)
         async with self.acquire(txn) as conn:
             # for delete, we reassign the parent id and delete in the vacuum task
             with watch("delete_object"):
-                await conn.execute(sql, oid)
+                await conn.execute(sql, oid, await writer.serialize(trashed=True))
         if self._autovacuum:
             txn.add_after_commit_hook(self._txn_oid_commit_hook, oid)
 
