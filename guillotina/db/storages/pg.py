@@ -292,7 +292,7 @@ register_sql(
     f"""
 UPDATE {{table_name}}
 SET
-    parent_id = '{TRASHED_ID}'
+    parent_id = '{TRASHED_ID}',
     state = CASE WHEN state != ''::bytea THEN state ELSE $2 END
 WHERE
     zoid = $1::varchar({MAX_UID_LENGTH})
