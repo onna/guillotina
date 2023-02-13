@@ -3,6 +3,7 @@ from guillotina import glogging
 from guillotina import metrics
 from guillotina._settings import app_settings
 from guillotina.const import TRASHED_ID
+from guillotina.component import query_adapter
 from guillotina.db.events import StorageCreatedEvent
 from guillotina.db.interfaces import IPostgresStorage
 from guillotina.db.interfaces import IWriter
@@ -1016,7 +1017,7 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
 
     async def delete(self, txn, oid):
         obj = await txn.get(oid)
-        writer = IWriter(obj)
+        writer = query_adapter(oj, IWriter)
         sql = self._sql.get("TRASH_PARENT_ID", self._objects_table_name)
         async with self.acquire(txn) as conn:
             # for delete, we reassign the parent id and delete in the vacuum task
