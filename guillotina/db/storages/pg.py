@@ -1017,7 +1017,7 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
 
     async def delete(self, txn, oid):
         obj = await txn.get(oid)
-        writer = query_adapter(oj, IWriter)
+        writer = query_adapter(obj, IWriter)
         sql = self._sql.get("TRASH_PARENT_ID", self._objects_table_name)
         async with self.acquire(txn) as conn:
             # for delete, we reassign the parent id and delete in the vacuum task
