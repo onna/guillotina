@@ -822,7 +822,7 @@ async def move(
         )
     )
 
-    context.__original_parent__ = original_parent.__uuid__
+    context.__original_parent__ = original_parent.__uuid__  # type: ignore
     context.__parent__ = destination_ob
     context.register()
 
