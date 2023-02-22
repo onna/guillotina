@@ -8,7 +8,7 @@ from guillotina.exceptions import ConflictError
 from guillotina.tests import mocks
 from guillotina.tests.utils import create_content
 from guillotina.utils import execute
-from unittest.mock import Mock, AsyncMock
+from unittest.mock import Mock, MagicMock
 from unittest.mock import patch
 from uuid import uuid4
 
@@ -264,7 +264,7 @@ async def test_should_call_after_commit_failure_hooks(db, dummy_guillotina):
 
         # 1 started before 2
         txn1 = await tm.begin()
-        on_failure = AsyncMock()
+        on_failure = MagicMock()
         execute.after_commit_failure(partial(on_failure))
         txn2 = await tm.begin()
 
