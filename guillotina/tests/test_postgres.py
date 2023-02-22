@@ -6,7 +6,8 @@ from guillotina.db.transaction_manager import TransactionManager
 from guillotina.exceptions import ConflictError
 from guillotina.tests import mocks
 from guillotina.tests.utils import create_content
-from unittest.mock import Mock
+from guillotina.utils import execute
+from unittest.mock import Mock, MagicMock
 from unittest.mock import patch
 from uuid import uuid4
 
@@ -244,6 +245,42 @@ async def test_should_raise_conflict_error_when_editing_diff_data_with_resolve_s
         await tm.commit(txn=txn2)
         with pytest.raises(ConflictError):
             await tm.commit(txn=txn1)
+
+        await aps.remove()
+        await cleanup(aps)
+
+
+@pytest.mark.skipif(DATABASE in ("DUMMY",), reason="")
+async def test_should_call_after_commit_failure_hooks(db, dummy_guillotina):
+    aps = await get_aps(db)
+    with TransactionManager(aps) as tm, await tm.begin() as txn:
+        ob = create_content()
+        ob.title = "foobar"
+        ob.description = "foobar"
+        txn.register(ob)
+
+        await tm.commit(txn=txn)
+
+        # 1 started before 2
+        txn1 = await tm.begin()
+        txn2 = await tm.begin()
+
+        ob1 = await txn1.get(ob.__uuid__)
+        ob2 = await txn2.get(ob.__uuid__)
+        ob1.title = "foobar1"
+        ob2.description = "foobar2"
+
+        txn1.register(ob1)
+        txn2.register(ob2)
+
+        on_failure = MagicMock()
+        execute.after_commit_failure(on_failure)
+
+        # commit 2 before 1
+        await tm.commit(txn=txn2)
+        with pytest.raises(ConflictError):
+            await tm.commit(txn=txn1)
+        on_failure.assert_called_once()
 
         await aps.remove()
         await cleanup(aps)
