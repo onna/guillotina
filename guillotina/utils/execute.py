@@ -117,7 +117,7 @@ def after_request_failed(func: Callable[..., Coroutine[Any, Any, Any]], *args, _
 
 def after_commit(func: Callable, *args, **kwargs):
     """
-    Execute a commit to the database.
+    Execute after a commit to the database.
 
     :param func: function to be queued
     :param \\*args: arguments to call the func with
@@ -127,6 +127,22 @@ def after_commit(func: Callable, *args, **kwargs):
     txn = get_transaction()
     if txn is not None:
         txn.add_after_commit_hook(func, args=args, kwargs=kwargs)
+    else:
+        raise TransactionNotFound("Could not find transaction to run job with")
+
+
+def after_commit_failure(func: Callable, *args, **kwargs):
+    """
+    Execute after a commit fails.
+
+    :param func: function to be queued
+    :param \\*args: arguments to call the func with
+    :param \\**kwargs: keyword arguments to call the func with
+    """
+    kwargs.pop("_request", None)  # b/w compat pop unused param
+    txn = get_transaction()
+    if txn is not None:
+        txn.add_after_commit_failure_hook(func, args=args, kwargs=kwargs)
     else:
         raise TransactionNotFound("Could not find transaction to run job with")
 
