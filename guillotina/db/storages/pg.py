@@ -278,9 +278,12 @@ OFFSET $3::int
 register_sql(
     "GET_CHILDREN",
     f"""
-SELECT zoid, tid, state_size, resource, type, state, id
+SELECT zoid, tid, state_size, resource, type, state, id, parent_id
 FROM {{table_name}}
 WHERE parent_id = $1::VARCHAR({MAX_UID_LENGTH})
+  AND CONCAT(parent_id, zoid) > $2
+ORDER BY by parent_id, zoid
+LIMIT $3
 """,
 )
 
@@ -1184,11 +1187,19 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
         sql = self._sql.get("GET_CHILDREN", self._objects_table_name)
         async with self.acquire(txn) as conn:
             with watch("items"):
-                # not going to be accurate measure but will tell you if it is abused
-                async for record in conn.cursor(sql, oid):
-                    # locks are dangerous in cursors since comsuming code might do
-                    # sub-queries and they you end up with a deadlock
-                    yield record
+                last_record = "000"
+                max_records = 100
+                while True:
+                    # not going to be accurate measure but will tell you if it is abused
+                    records = await conn.fetch(sql, oid, last_record, max_records)
+                    for record in records:
+                        last_record = f"{record['parent_id']}{record['zoid']}"
+                        # locks are dangerous in cursors since comsuming code might do
+                        # sub-queries and they you end up with a deadlock
+                        yield record
+
+                    if len(records) < max_records:
+                        break
 
     async def get_annotation(self, txn, oid, id):
         sql = self._sql.get("GET_ANNOTATION", self._objects_table_name)
