@@ -154,6 +154,7 @@ class BasicCache(BaseCache):
                 "type": getattr(obj, "type_name", None),
             }
             if obj.__of__:
+                val["of"] = obj.__of__
                 await self.set(
                     val, [dict(oid=obj.__of__, id=obj.__name__, variant="annotation"), dict(oid=obj.__uuid__)]
                 )
