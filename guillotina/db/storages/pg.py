@@ -3,8 +3,10 @@ from guillotina import glogging
 from guillotina import metrics
 from guillotina._settings import app_settings
 from guillotina.const import TRASHED_ID
+from guillotina.component import query_adapter
 from guillotina.db.events import StorageCreatedEvent
 from guillotina.db.interfaces import IPostgresStorage
+from guillotina.db.interfaces import IWriter
 from guillotina.db.storages.base import BaseStorage
 from guillotina.db.storages.utils import clear_table_name
 from guillotina.db.storages.utils import get_table_definition
@@ -16,6 +18,7 @@ from guillotina.exceptions import ConflictError
 from guillotina.exceptions import ConflictIdOnContainer
 from guillotina.exceptions import TIDConflictError
 from guillotina.profile import profilable
+from guillotina.utils.content import get_object_by_uid
 from zope.interface import implementer
 
 import asyncio
@@ -290,7 +293,8 @@ register_sql(
     f"""
 UPDATE {{table_name}}
 SET
-    parent_id = '{TRASHED_ID}'
+    parent_id = '{TRASHED_ID}',
+    state = CASE WHEN state != ''::bytea THEN state ELSE $2 END
 WHERE
     zoid = $1::varchar({MAX_UID_LENGTH})
 """,
@@ -926,7 +930,7 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
     async def store(self, oid, old_serial, writer, obj, txn):
         assert oid is not None
 
-        pickled = writer.serialize()  # This calls __getstate__ of obj
+        pickled = await writer.serialize()  # This calls __getstate__ of obj
         if len(pickled) >= self._large_record_size:
             log.info(f"Large object {obj.__class__}: {len(pickled)}")
         if self._store_json:
@@ -1013,11 +1017,14 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
         return TransactionConnectionContextManager(self, txn)
 
     async def delete(self, txn, oid):
+        obj = await get_object_by_uid(oid)
+        writer = query_adapter(obj, IWriter)
         sql = self._sql.get("TRASH_PARENT_ID", self._objects_table_name)
         async with self.acquire(txn) as conn:
             # for delete, we reassign the parent id and delete in the vacuum task
             with watch("delete_object"):
-                await conn.execute(sql, oid)
+                trashed_representation = await writer.serialize(trashed=True)
+                await conn.execute(sql, oid, trashed_representation)
         if self._autovacuum:
             txn.add_after_commit_hook(self._txn_oid_commit_hook, oid)
 

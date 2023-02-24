@@ -262,3 +262,11 @@ class TransactionObjectRegistrationMismatchException(Exception):
             f"Object already registered for this transaction with same uid "
             f"but different object instance: {registered_object.uuid}"
         )
+
+
+class StateOffloadReadException(Exception):
+    ...
+
+
+class StateOffloadWriteException(Exception):
+    ...

@@ -94,7 +94,7 @@ async def test_cache_object(guillotina_main, loop):
     cache = BasicCache(txn)
     txn._cache = cache
     ob = create_content()
-    storage.store(None, None, None, ob, txn)
+    await storage.store(None, None, None, ob, txn)
     loaded = await txn.get(ob.__uuid__)
     assert id(loaded) != id(ob)
     assert loaded.__uuid__ == ob.__uuid__
@@ -116,8 +116,8 @@ async def test_cache_object_from_child(guillotina_main, loop):
     ob = create_content()
     parent = create_content()
     ob.__parent__ = parent
-    storage.store(None, None, None, parent, txn)
-    storage.store(None, None, None, ob, txn)
+    await storage.store(None, None, None, parent, txn)
+    await storage.store(None, None, None, ob, txn)
 
     loaded = await txn.get_child(parent, ob.id)
     assert cache._hits == 0
@@ -137,7 +137,7 @@ async def test_do_not_cache_large_object(guillotina_main, loop):
     txn._cache = cache
     ob = create_content()
     ob.foobar = "X" * cache.max_cache_record_size  # push size above cache threshold
-    storage.store(None, None, None, ob, txn)
+    await storage.store(None, None, None, ob, txn)
     loaded = await txn.get(ob.__uuid__)
     assert id(loaded) != id(ob)
     assert loaded.__uuid__ == ob.__uuid__

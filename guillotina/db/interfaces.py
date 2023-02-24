@@ -37,6 +37,11 @@ class ITransaction(Interface):
         Add hook to be called after transaction commit
         """
 
+    async def add_after_commit_failure_hook(hook, *real_args, args=None, kws=None, **kwargs):
+        """
+        Add hook to be called after a failure to perform transaction commit
+        """
+
     async def add_before_commit_hook(hook, *real_args, args=None, kws=None, **kwargs):
         """
         Add hook to be called before txn commit

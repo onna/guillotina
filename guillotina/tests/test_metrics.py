@@ -11,7 +11,7 @@ from guillotina.db.storages.pg import PostgresqlStorage
 from guillotina.db.transaction import Transaction
 from guillotina.db.transaction_manager import TransactionManager
 from guillotina.tests.utils import create_content
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import asyncio
 import pickle
@@ -125,6 +125,8 @@ class TestPGMetrics:
     def _make_txn(self):
         mock = AsyncMock()
         mock.lock = mock._lock = asyncio.Lock()
+        mock.get = AsyncMock(return_value=MagicMock())
+        mock._manager = MagicMock()
         return mock
 
     async def test_load_object(self, metrics_registry):
@@ -150,7 +152,9 @@ class TestPGMetrics:
         ob.__serial__ = 1
         txn = self._make_txn()
         txn.get_connection.return_value.fetch.return_value = [{"count": 1}]
-        await storage.store("foobar", 1, MagicMock(), ob, txn)
+        writer = AsyncMock()
+        writer.serialize = AsyncMock(return_value=b"test")
+        await storage.store("foobar", 1, writer, ob, txn)
         assert (
             metrics_registry.get_sample_value(
                 "guillotina_db_pg_ops_total", {"type": "store_object", "error": "none"}
@@ -165,20 +169,32 @@ class TestPGMetrics:
         )
 
     async def test_delete_object(self, metrics_registry):
-        storage = PostgresqlStorage(autovacuum=False)
-        await storage.delete(self._make_txn(), "foobar")
-        assert (
-            metrics_registry.get_sample_value(
-                "guillotina_db_pg_ops_total", {"type": "delete_object", "error": "none"}
-            )
-            == 1.0
-        )
-        assert (
-            metrics_registry.get_sample_value(
-                "guillotina_db_pg_ops_processing_time_seconds_sum", {"type": "delete_object"}
-            )
-            > 0
-        )
+        writer = AsyncMock()
+        writer.serialize = AsyncMock(return_value=b"test")
+        writer.get_json = AsyncMock(return_value="{}")
+        with patch("guillotina.db.storages.pg.query_adapter", return_value=writer):
+            storage = PostgresqlStorage(autovacuum=False)
+            ob = MagicMock()
+            ob.__new_marker__ = False
+            ob.__serial__ = 1
+            txn = self._make_txn()
+            txn.get_connection.return_value.fetch.return_value = [{"count": 1}]
+            txn._manager._hard_cache.get.return_value = None
+            with patch("guillotina.db.storages.pg.get_object_by_uid", return_value=ob):
+                await storage.store("foobar", 1, writer, ob, txn)
+                await storage.delete(txn, "foobar")
+                assert (
+                    metrics_registry.get_sample_value(
+                        "guillotina_db_pg_ops_total", {"type": "delete_object", "error": "none"}
+                    )
+                    == 1.0
+                )
+                assert (
+                    metrics_registry.get_sample_value(
+                        "guillotina_db_pg_ops_processing_time_seconds_sum", {"type": "delete_object"}
+                    )
+                    > 0
+                )
 
 
 async def test_lock_metric():

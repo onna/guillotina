@@ -204,6 +204,7 @@ class Transaction:
 
         # List of (hook, args, kws) tuples added by addAfterCommitHook().
         self._after_commit = []
+        self._after_commit_failure = []
 
         self._cache = cache or query_adapter(self, ITransactionCache, name=app_settings["cache"]["strategy"])
         self._query_count_start = self._query_count_end = 0
@@ -260,6 +261,10 @@ class Transaction:
         """See ITransaction."""
         return iter(self._after_commit)
 
+    def get_after_commit_failure_hooks(self):
+        """See ITransaction."""
+        return iter(self._after_commit_failure)
+
     def add_after_commit_hook(self, hook, *real_args, args=None, kws=None, **kwargs):
         """See ITransaction."""
         args = args or []
@@ -267,16 +272,23 @@ class Transaction:
         kwargs.update(kws)
         self._after_commit.append((hook, real_args + tuple(args), kwargs))
 
+    def add_after_commit_failure_hook(self, hook, *real_args, args=None, kws=None, **kwargs):
+        """See ITransaction."""
+        args = args or []
+        kws = kws or {}
+        kwargs.update(kws)
+        self._after_commit_failure.append((hook, real_args + tuple(args), kwargs))
+
     @profilable
-    async def _call_after_commit_hooks(self, status=True):
+    async def _call_after_commit_hooks(self, hooks, status=True):
         # Avoid to abort anything at the end if no hooks are registred.
-        if not self._after_commit:
+        if not hooks:
             return
         # Call all hooks registered, allowing further registrations
         # during processing.  Note that calls to addAterCommitHook() may
         # add additional hooks while hooks are running, and iterating over a
         # growing list is well-defined in Python.
-        for hook, args, kws in self._after_commit:
+        for hook, args, kws in hooks:
             # The first argument passed to the hook is a Boolean value,
             # true if the commit succeeded, or false if the commit aborted.
             try:
@@ -287,7 +299,16 @@ class Transaction:
                 # We need to catch the exceptions if we want all hooks
                 # to be called
                 logger.error("Error in after commit hook exec in %s ", hook, exc_info=sys.exc_info())
+
+    async def _call_after_commit_success_hooks(self, status=True):
+        result = await self._call_after_commit_hooks(self._after_commit, status=status)
         self._after_commit = []
+        return result
+
+    async def _call_after_commit_failure_hooks(self, status=True):
+        result = await self._call_after_commit_hooks(self._after_commit_failure, status=status)
+        self._after_commit_failure = []
+        return result
 
     # BEGIN TXN
     async def tpc_begin(self):
@@ -298,6 +319,7 @@ class Transaction:
         self._txn_time = time.time()
         # make sure this is reset on retries
         self._after_commit = []
+        self._after_commit_failure = []
         self._before_commit = []
 
     @property
@@ -385,7 +407,7 @@ class Transaction:
         if result is None:
             result = await self._get(oid)
 
-        obj = app_settings["object_reader"](result)
+        obj = await app_settings["object_reader"](result)
         obj.__txn__ = self
         if obj.__immutable_cache__:
             # ttl of zero means we want to provide a hard cache here
@@ -429,9 +451,10 @@ class Transaction:
             await self._manager._storage.abort(self)
             await self._cache.close(invalidate=isinstance(ex, TIDConflictError), publish=False)
             self.tpc_cleanup()
+            await self._call_after_commit_failure_hooks()
             raise
         self.status = Status.COMMITTED
-        await self._call_after_commit_hooks()
+        await self._call_after_commit_success_hooks()
 
     @profilable
     async def abort(self):
@@ -542,10 +565,10 @@ class Transaction:
         if result is None:
             return None
 
-        return self._fill_object(result, parent)
+        return await self._fill_object(result, parent)
 
-    def _fill_object(self, item: dict, parent: IBaseObject) -> IBaseObject:
-        obj = app_settings["object_reader"](item)
+    async def _fill_object(self, item: dict, parent: IBaseObject) -> IBaseObject:
+        obj = await app_settings["object_reader"](item)
         obj.__parent__ = parent
         obj.__txn__ = self
         return obj
@@ -554,7 +577,7 @@ class Transaction:
         for litem in await self._manager._storage.get_children(self, parent.__uuid__, keys):
             if len(litem["state"]) < self._cache.max_cache_record_size:
                 await self._cache.set(litem, container=parent, id=litem["id"])
-            yield self._fill_object(litem, parent)
+            yield await self._fill_object(litem, parent)
 
     async def get_children(self, parent, keys):
         """
@@ -581,7 +604,7 @@ class Transaction:
                     yield litem
                 lookup_group = []
 
-            yield self._fill_object(item, parent)
+            yield await self._fill_object(item, parent)
 
         # flush the rest
         if len(lookup_group) > 0:
@@ -629,9 +652,9 @@ class Transaction:
         if result == _EMPTY:
             raise KeyError(id)
         if reader is None:
-            obj = app_settings["object_reader"](result)
+            obj = await app_settings["object_reader"](result)
         else:
-            obj = reader(result)
+            obj = await reader(result)
         obj.__of__ = base_obj.__uuid__
         obj.__txn__ = self
         return obj

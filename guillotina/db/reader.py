@@ -11,7 +11,7 @@ PICKLE_PREFIXES = [
 ]
 
 
-def reader(result: dict) -> IBaseObject:
+async def reader(result: dict) -> IBaseObject:
     state = result["state"]
 
     # Detect if this is a compressed or plain pickle.
