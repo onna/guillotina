@@ -127,8 +127,9 @@ class MockStorage:  # type: ignore
 
     async def store(self, oid, old_serial, writer, ob, txn):
         writer = IWriter(ob)
+        pickled, _ = await writer.serialize()
         self._objects[ob.__uuid__] = {
-            "state": await writer.serialize(),
+            "state": pickled,
             "zoid": ob.__uuid__,
             "tid": 1,
             "id": writer.id,
