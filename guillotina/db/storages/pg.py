@@ -917,6 +917,8 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
         objects = await self.get_one_row(txn, sql, oid, metric="load_object_by_oid")
         if objects is None:
             raise KeyError(oid)
+        objects = dict(objects)
+        objects["state"] = await app_settings["state_reader"](objects)
         return objects
 
     async def get_obj_tid(self, txn, oid):
@@ -930,7 +932,7 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
     async def store(self, oid, old_serial, writer, obj, txn):
         assert oid is not None
 
-        pickled = await writer.serialize()  # This calls __getstate__ of obj
+        pickled, cache_value = await writer.serialize()  # This calls __getstate__ of obj
         if len(pickled) >= self._large_record_size:
             log.info(f"Large object {obj.__class__}: {len(pickled)}")
         if self._store_json:
@@ -1007,7 +1009,7 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
                         "Incorrect response count from database update. "
                         "This should not happen. tid: {}".format(txn._tid)
                     )
-        await txn._cache.store_object(obj, pickled)
+        await txn._cache.store_object(obj, cache_value)
 
     async def _txn_oid_commit_hook(self, status, oid):
         if self._connection_manager._vacuum is not None:
@@ -1023,7 +1025,7 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
         async with self.acquire(txn) as conn:
             # for delete, we reassign the parent id and delete in the vacuum task
             with watch("delete_object"):
-                trashed_representation = await writer.serialize(trashed=True)
+                trashed_representation, _ = await writer.serialize(trashed=True)
                 await conn.execute(sql, oid, trashed_representation)
         if self._autovacuum:
             txn.add_after_commit_hook(self._txn_oid_commit_hook, oid)
@@ -1164,13 +1166,21 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
     async def get_child(self, txn, parent_oid, id):
         sql = self._sql.get("GET_CHILD", self._objects_table_name)
         result = await self.get_one_row(txn, sql, parent_oid, id, metric="get_child")
+        if result:
+            result = dict(result)
+            result["state"] = await app_settings["state_reader"](result)
         return result
 
     async def get_children(self, txn, parent_oid, ids):
         sql = self._sql.get("GET_CHILDREN_BATCH", self._objects_table_name)
         async with self.acquire(txn) as conn:
             with watch("get_children"):
-                return await conn.fetch(sql, parent_oid, ids)
+                result = await conn.fetch(sql, parent_oid, ids)
+                if result:
+                    result = [dict(row) for row in result]
+                    for row in result:
+                        row["state"] = await app_settings["state_reader"](row)
+                return result
 
     async def has_key(self, txn, parent_oid, id):
         sql = self._sql.get("EXIST_CHILD", self._objects_table_name)
@@ -1195,13 +1205,18 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
                 async for record in conn.cursor(sql, oid):
                     # locks are dangerous in cursors since comsuming code might do
                     # sub-queries and they you end up with a deadlock
-                    yield record
+                    obj = dict(record)
+                    obj["state"] = await app_settings["state_reader"](obj)
+                    yield obj
 
     async def get_annotation(self, txn, oid, id):
         sql = self._sql.get("GET_ANNOTATION", self._objects_table_name)
         result = await self.get_one_row(txn, sql, oid, id, metric="load_annotation")
         if result is not None and result["parent_id"] == TRASHED_ID:
             result = None
+        if result:
+            result = dict(result)
+            result["state"] = await app_settings["state_reader"](result)
         return result
 
     async def get_annotation_keys(self, txn, oid):
@@ -1280,5 +1295,7 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
             keys = []
             sql = self._sql.get("RESOURCES_BY_TYPE", self._objects_table_name)
             for record in await conn.fetch(sql, type_, page_size, (page - 1) * page_size):
-                keys.append(record)
+                row = dict(record)
+                row["state"] = await app_settings["state_reader"](row)
+                keys.append(row)
             return keys

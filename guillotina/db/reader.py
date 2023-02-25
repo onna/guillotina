@@ -1,3 +1,4 @@
+from guillotina._settings import app_settings
 from guillotina.db.orm.interfaces import IBaseObject
 
 import brotli
@@ -11,8 +12,12 @@ PICKLE_PREFIXES = [
 ]
 
 
-async def reader(result: dict) -> IBaseObject:
-    state = result["state"]
+async def state_reader(result: dict) -> bytes:
+    return result["state"]
+
+
+async def object_reader(result: dict) -> IBaseObject:
+    state = await app_settings["state_reader"](result)
 
     # Detect if this is a compressed or plain pickle.
     if state[-1:] == pickle.STOP and state[0:2] in PICKLE_PREFIXES:

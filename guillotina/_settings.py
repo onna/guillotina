@@ -91,7 +91,8 @@ app_settings: Dict[str, Any] = {
     "check_writable_request": "guillotina.writable.check_writable_request",
     "indexer": "guillotina.catalog.index.Indexer",
     "search_parser": "default",
-    "object_reader": "guillotina.db.reader.reader",
+    "state_reader": "guillotina.db.reader.state_reader",
+    "object_reader": "guillotina.db.reader.object_reader",
     "thread_pool_workers": 32,
     "valid_id_characters": string.digits + string.ascii_lowercase + ".-_@$^()+ =",
 }

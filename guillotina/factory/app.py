@@ -208,6 +208,7 @@ _dotted_name_settings = (
     "cors_renderer",
     "check_writable_request",
     "indexer",
+    "state_reader",
     "object_reader",
 )
 
