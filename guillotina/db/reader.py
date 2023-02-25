@@ -13,11 +13,6 @@ PICKLE_PREFIXES = [
 
 
 async def state_reader(result: dict) -> bytes:
-    if isinstance(result["state"], tuple):
-        # The root object appears to have a tuple as the state value,
-        # which duplicates?
-        state_vals = {state for state in result["state"]}
-        result["state"] = list(state_vals)[0]
     return result["state"]
 
 
