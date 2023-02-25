@@ -152,6 +152,7 @@ class BasicCache(BaseCache):
                 "tid": obj.__serial__,
                 "id": obj.__name__,
                 "type": getattr(obj, "type_name", None),
+                "parent_id": None,
             }
             if obj.__of__:
                 val["of"] = obj.__of__
@@ -163,9 +164,6 @@ class BasicCache(BaseCache):
                 if obj.__parent__:
                     val["parent_id"] = obj.__parent__.__uuid__
                     keyset.append(dict(container=obj.__parent__, id=obj.__name__))
-                else:
-                    # root object does not have a parent
-                    val["parent_id"] = None
                 await self.set(val, keyset)
 
     @profilable
@@ -186,11 +184,14 @@ class BasicCache(BaseCache):
                     "tid": obj.__serial__,
                     "id": obj.__name__,
                     "type": getattr(obj, "type_name", None),
+                    "parent_id": None,
                 }
                 if obj.__of__:
+                    val["of"] = obj.__of__
                     ob_key = self.get_key(oid=obj.__of__, id=obj.__name__, variant="annotation")
                 else:
                     if obj.__parent__:
+                        val["parent_id"] = obj.__parent__.__uuid__
                         ob_key = self.get_key(container=obj.__parent__, id=obj.__name__)
                     else:
                         ob_key = self.get_key(oid=obj.__uuid__)
