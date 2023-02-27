@@ -59,7 +59,8 @@ class Writer(object):
 
     async def serialize(self, *, trashed=False):
         protocol = app_settings.get("pickle_protocol", pickle.HIGHEST_PROTOCOL)
-        return brotli.compress(pickle.dumps(self._obj, protocol=protocol), quality=1)
+        pickled = brotli.compress(pickle.dumps(self._obj, protocol=protocol), quality=1)
+        return pickled, pickled
 
     @property
     def parent_id(self):

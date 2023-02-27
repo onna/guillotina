@@ -1,6 +1,7 @@
 from asyncmock import AsyncMock
 from asyncpg.protocol.protocol import _create_record as Record
 from guillotina import metrics
+from guillotina._settings import app_settings
 from guillotina.const import ROOT_ID
 from guillotina.content import Container
 from guillotina.contrib.cache import memcache
@@ -131,6 +132,16 @@ class TestPGMetrics:
 
     async def test_load_object(self, metrics_registry):
         storage = PostgresqlStorage()
+        conn = AsyncMock()
+        conn.fetchrow = AsyncMock(return_value={})
+        from contextlib import asynccontextmanager
+
+        @asynccontextmanager
+        async def _acquire(_):
+            yield conn
+
+        storage.acquire = _acquire  # AsyncMock(return_value=conn)
+        app_settings["state_reader"] = AsyncMock(return_value=b"")
         await storage.load(self._make_txn(), "foobar")
         assert (
             metrics_registry.get_sample_value(
@@ -153,7 +164,7 @@ class TestPGMetrics:
         txn = self._make_txn()
         txn.get_connection.return_value.fetch.return_value = [{"count": 1}]
         writer = AsyncMock()
-        writer.serialize = AsyncMock(return_value=b"test")
+        writer.serialize = AsyncMock(return_value=(b"test", b"test"))
         await storage.store("foobar", 1, writer, ob, txn)
         assert (
             metrics_registry.get_sample_value(
@@ -170,7 +181,7 @@ class TestPGMetrics:
 
     async def test_delete_object(self, metrics_registry):
         writer = AsyncMock()
-        writer.serialize = AsyncMock(return_value=b"test")
+        writer.serialize = AsyncMock(return_value=(b"test", b"test"))
         writer.get_json = AsyncMock(return_value="{}")
         with patch("guillotina.db.storages.pg.query_adapter", return_value=writer):
             storage = PostgresqlStorage(autovacuum=False)

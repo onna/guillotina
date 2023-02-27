@@ -1,6 +1,11 @@
 CHANGELOG
 =========
 
+5.4.9 (2023-02-25)
+------------------
+
+- Add state_reader method to ensure cache includes the correct/populated state value.
+
 5.4.8 (2023-02-24)
 ------------------
 
