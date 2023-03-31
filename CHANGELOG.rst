@@ -1,6 +1,11 @@
 CHANGELOG
 =========
 
+5.4.10 (2023-03-31)
+-------------------
+
+- Keep reference to modified object's serial after commit.
+
 5.4.9 (2023-02-25)
 ------------------
 
