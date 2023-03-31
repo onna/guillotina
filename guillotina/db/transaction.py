@@ -539,9 +539,7 @@ class Transaction:
 
     def tpc_cleanup(self):
         self.added = {}
-        self.version_history = {
-            zoid: obj.__serial__ for zoid, obj in self.modified.items()
-        }
+        self.version_history = {zoid: obj.__serial__ for zoid, obj in self.modified.items()}
         self.modified = {}
         self.deleted = {}
         self._db_txn = None
