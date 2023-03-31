@@ -197,6 +197,7 @@ class Transaction:
         # reference each other
         self.added = OrderedDict()
         self.modified = {}
+        self.version_history = {}
         self.deleted = {}
 
         # List of (hook, args, kws) tuples added by addBeforeCommitHook().
@@ -451,6 +452,7 @@ class Transaction:
             await self._manager._storage.abort(self)
             await self._cache.close(invalidate=isinstance(ex, TIDConflictError), publish=False)
             self.tpc_cleanup()
+            self.version_history = {}
             await self._call_after_commit_failure_hooks()
             raise
         self.status = Status.COMMITTED
@@ -537,6 +539,7 @@ class Transaction:
 
     def tpc_cleanup(self):
         self.added = {}
+        self.version_history = {zoid: obj.__serial__ for zoid, obj in self.modified.items()}
         self.modified = {}
         self.deleted = {}
         self._db_txn = None
