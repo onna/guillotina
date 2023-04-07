@@ -53,7 +53,7 @@ def test_warn_about_jwt_secret(loop, caplog):
     settings.update({"debug": False, "jwt": {"algorithm": "HS256", "secret": "secret"}})
     with caplog.at_level(logging.WARNING, logger="guillotina"):
         globalregistry.reset()
-        loop.run_until_complete(make_app(settings=settings, loop=loop))
+        loop.run_until_complete(make_app(settings=settings))
         assert len(caplog.records) == 1
         assert "strongly advised" in caplog.records[0].message
 
@@ -63,7 +63,7 @@ def test_warn_about_jwt_complexity(loop, caplog):
     settings.update({"debug": False, "jwt": {"algorithm": "HS256", "secret": "DKK@7328*!&@@"}})
     with caplog.at_level(logging.WARNING, logger="guillotina"):
         globalregistry.reset()
-        loop.run_until_complete(make_app(settings=settings, loop=loop))
+        loop.run_until_complete(make_app(settings=settings))
         assert len(caplog.records) == 1
         assert "insecure secret" in caplog.records[0].message
 
@@ -73,7 +73,7 @@ def test_not_warn_about_jwt_secret(loop, caplog):
     settings.update({"debug": True, "jwt": {"algorithm": "HS256", "secret": "secret"}})
     with caplog.at_level(logging.WARNING, logger="guillotina"):
         globalregistry.reset()
-        loop.run_until_complete(make_app(settings=settings, loop=loop))
+        loop.run_until_complete(make_app(settings=settings))
         assert len(caplog.records) == 0
 
 

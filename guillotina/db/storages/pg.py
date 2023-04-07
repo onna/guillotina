@@ -423,7 +423,7 @@ class PGVacuum:
     def __init__(self, manager, loop):
         self._manager = manager
         self._loop = loop
-        self._queue = asyncio.Queue(loop=loop)
+        self._queue = asyncio.Queue()
         self._closed = False
         self._active = False
         self._sql = SQLStatements()
@@ -590,7 +590,6 @@ class PGConnectionManager:
                 max_size=self._pool_size,
                 min_size=1,
                 connection_class=app_settings["pg_connection_class"],
-                loop=loop,
                 **kw,
             )
 
@@ -599,7 +598,7 @@ class PGConnectionManager:
 
             if self._autovacuum:
                 self._vacuum = self._vacuum_class(self, loop)
-                self._vacuum_task = asyncio.Task(self._vacuum.initialize(), loop=loop)
+                self._vacuum_task = asyncio.Task(self._vacuum.initialize())
 
     async def restart(self, timeout=2):
         # needs to be used with lock

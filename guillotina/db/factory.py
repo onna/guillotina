@@ -68,7 +68,7 @@ async def _PGConfigurationFactory(key, dbconfig, loop=None, storage_factory=Post
 
     aps = storage_factory(**dbconfig)
     if loop is not None:
-        await aps.initialize(loop=loop, **connection_options)
+        await aps.initialize(**connection_options)
     else:
         await aps.initialize(**connection_options)
 
@@ -82,8 +82,8 @@ async def _PGConfigurationFactory(key, dbconfig, loop=None, storage_factory=Post
 
 
 @configure.utility(provides=IDatabaseConfigurationFactory, name="postgresql")
-async def PGDatabaseConfigurationFactory(key, dbconfig, loop=None):
-    return await _PGConfigurationFactory(key, dbconfig, loop=loop)
+async def PGDatabaseConfigurationFactory(key, dbconfig):
+    return await _PGConfigurationFactory(key, dbconfig)
 
 
 @configure.utility(provides=IDatabaseConfigurationFactory, name="DUMMY")
@@ -107,7 +107,7 @@ DELETE_DB = """DROP DATABASE "{}";"""
 
 
 def _safe_db_name(name):
-    return "".join([l for l in name if l in string.digits + string.ascii_lowercase + "-_"])
+    return "".join([char for char in name if char in string.digits + string.ascii_lowercase + "-_"])
 
 
 @configure.adapter(for_=IApplication, provides=IDatabaseManager, name="postgresql")  # noqa: N801
@@ -116,7 +116,7 @@ class PostgresqlDatabaseManager:
         self.app = app
         self.config = storage_config
 
-    def get_dsn(self, name: str = None) -> str:
+    def get_dsn(self, name: str = "") -> str:
         if isinstance(self.config["dsn"], str):
             dsn = self.config["dsn"]
         else:
@@ -132,7 +132,7 @@ class PostgresqlDatabaseManager:
                 dsn += "?" + params
         return dsn
 
-    async def get_connection(self, name: str = None) -> asyncpg.connection.Connection:
+    async def get_connection(self, name: str = "") -> asyncpg.connection.Connection:
         connection_options = _get_connection_options(self.config)
         for key in ("max_inactive_connection_lifetime", "max_queries"):
             # these are not valid for raw connections

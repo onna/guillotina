@@ -53,7 +53,7 @@ class BasicCache(BaseCache):
         return obj
 
     @profilable
-    async def set(self, value, keyset: List[Dict[str, Any]] = None, **kwargs):
+    async def set(self, value, keyset: List[Dict[str, Any]] = None, **kwargs):  # type: ignore
         if self._utility is None:
             return
         if keyset is None:

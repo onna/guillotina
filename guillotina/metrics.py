@@ -25,7 +25,7 @@ class watch:
         *,
         counter: Optional[Counter] = None,
         histogram: Optional[Histogram] = None,
-        error_mappings: Dict[str, Type[Exception]] = None,
+        error_mappings: Dict[str, Type[Exception]] = None,  # type: ignore
         labels: Optional[Dict[str, str]] = None,
     ):
         self.counter = counter

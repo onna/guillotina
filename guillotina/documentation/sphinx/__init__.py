@@ -55,16 +55,15 @@ def get_server():
                 "databases": {"db": {"storage": "DUMMY", "dsn": {}, "name": "db"}},
                 "root_user": {"password": "root"},
                 "jwt": {"secret": "foobar", "algorithm": "HS256"},
-            },
-            loop=loop,
+            }
         )
     )
     aioapp.config.execute_actions()
     load_cached_schema()
 
     server = TestServer(aioapp)
-    loop.run_until_complete(server.start_server(loop=loop))
-    _server = {"loop": loop, "server": server, "client": TestClient(server, loop=loop), "app": aioapp}
+    loop.run_until_complete(server.start_server())
+    _server = {"loop": loop, "server": server, "client": TestClient(server), "app": aioapp}
     return _server
 
 

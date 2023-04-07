@@ -59,7 +59,7 @@ class ApplicationRoot:  # type: ignore
         interface = import_class(config["provides"])
         factory = import_class(config["factory"])
         try:
-            utility_object = lazy_apply(factory, config.get("settings", {}), loop=loop or self._loop)
+            utility_object = lazy_apply(factory, config.get("settings", {}))
         except Exception:
             logger.error("Error initializing utility {}".format(repr(factory)), exc_info=True)
             raise
@@ -71,7 +71,7 @@ class ApplicationRoot:  # type: ignore
         if hasattr(utility_object, "initialize"):
             func = lazy_apply(utility_object.initialize, app=self.app)
 
-            task = asyncio.ensure_future(notice_on_error(key, func), loop=loop or self._loop)
+            task = asyncio.ensure_future(notice_on_error(key, func))
             self.add_async_task(key, task, config)
             return utility_object, task
         else:

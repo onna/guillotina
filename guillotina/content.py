@@ -168,7 +168,7 @@ class Resource(guillotina.db.orm.base.BaseObject):
         """
         return self.__uuid__
 
-    def __init__(self, id: str = None) -> None:
+    def __init__(self, id: str = None) -> None:  # type: ignore
         if id is not None:
             self.__name__ = id
         super(Resource, self).__init__()
@@ -424,12 +424,12 @@ class StaticDirectory(dict):
     Using dict makes this a simple container so traversing works
     """
 
-    def __init__(self, file_path: pathlib.Path, base_path: pathlib.Path = None) -> None:
+    def __init__(self, file_path: pathlib.Path, base_path: pathlib.Path = None) -> None:  # type: ignore
         self.file_path = file_path
         if base_path is None:
             self.base_path = file_path
         else:
-            self.base_path = base_path
+            self.base_path = base_path  # type: ignore
 
     def __getitem__(self, filename):
         path = pathlib.Path(os.path.join(self.file_path.absolute(), filename))
@@ -570,7 +570,7 @@ async def create_content(type_, **kw) -> IResource:
 
 @profilable
 async def create_content_in_container(
-    parent: Folder, type_: str, id_: str, request: IRequest = None, check_security=True, **kw
+    parent: Folder, type_: str, id_: str, request: IRequest = None, check_security=True, **kw  # type: ignore
 ) -> Resource:
     """Utility to create a content.
 

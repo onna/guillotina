@@ -7,7 +7,7 @@ class IResponse(Interface):
     content = Attribute("content")
     headers = Attribute("headers")
 
-    def __init__(*, content: dict = None, headers: dict = None, status: int = None):
+    def __init__(*, content: dict = {}, headers: dict = {}, status: int = None):  # type: ignore
         """
         """
 

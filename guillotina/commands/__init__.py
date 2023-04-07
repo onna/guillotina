@@ -168,8 +168,7 @@ class Command(object):
             run_func(app, settings)
 
     def __run_with_monitor(self, app, settings):
-        loop = self.get_loop()
-        with aiomonitor.start_monitor(loop=loop):
+        with aiomonitor.start_monitor():
             self.__run(app, settings)
 
     def __run(self, app, settings):
@@ -204,7 +203,7 @@ class Command(object):
             await app.on_cleanup.send(app)
         except Exception:
             logger.warning("Unhandled error cleanup tasks", exc_info=True)
-        for task in asyncio.Task.all_tasks():
+        for task in asyncio.all_tasks():
             if task.done():
                 continue
             if "cleanup" in task._coro.__qualname__:
@@ -237,7 +236,7 @@ class Command(object):
     def make_app(self, settings):
         signal.signal(signal.SIGINT, self.signal_handler)
         loop = self.get_loop()
-        return loop.run_until_complete(make_app(settings=settings, loop=loop))
+        return loop.run_until_complete(make_app(settings=settings))
 
     def get_parser(self):
         parser = argparse.ArgumentParser(description=self.description)

@@ -386,7 +386,7 @@ SELECT 'DROP INDEX ' || string_agg(indexrelid::regclass::text, ', ')
 @pytest.fixture(scope="function")
 def guillotina_main(loop, request):
     globalregistry.reset()
-    aioapp = loop.run_until_complete(make_app(settings=get_db_settings(request.node), loop=loop))
+    aioapp = loop.run_until_complete(make_app(settings=get_db_settings(request.node)))
     aioapp.config.execute_actions()
     load_cached_schema()
 

@@ -1,4 +1,4 @@
-from collections import MutableMapping
+from collections.abc import MutableMapping
 from functools import partial
 from guillotina import glogging
 from guillotina import task_vars
@@ -133,7 +133,7 @@ def loop_apply_coroutine(loop, func: types.FunctionType, *args, **kwargs) -> obj
     If the result is a coroutine, use the supplied loop to run it.
     """
     if asyncio.iscoroutinefunction(func):
-        future = asyncio.ensure_future(func(*args, **kwargs), loop=loop)
+        future = asyncio.ensure_future(func(*args, **kwargs))
 
         loop.run_until_complete(future)
         return future.result()

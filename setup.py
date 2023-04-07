@@ -75,11 +75,11 @@ setup(
     ],
     extras_require={
         "test": [
-            "pytest>=4.6.0,<6.1.0",
+            "pytest==6.2.5",
             "docker>=5.0.0,<6.0.0",
             "backoff",
             "psycopg2-binary",
-            "pytest-asyncio==0.10.0",
+            "pytest-asyncio==0.14.0",
             "pytest-cov>=2.0.0,<=2.9.0",
             "coverage>=4.0.3",
             "pytest-docker-fixtures",
@@ -96,7 +96,7 @@ setup(
             "sphinx-guillotina-theme",
             "sphinx-autodoc-typehints",
         ],
-        "redis": ['aioredis>=1.2.0;python_version<"3.8"', 'aioredis>=1.3.0;python_version>="3.8"'],
+        "redis": ['aioredis==1.3.1'],
         "memcached": ["emcache"],
         "mailer": ["html2text>=2018.1.9", "aiosmtplib>=1.0.6"],
     },
