@@ -4,8 +4,8 @@ aiosmtplib==1.0.6
 pre-commit==1.18.2
 flake8==6.0.0
 codecov==2.0.15
-mypy==0.910
-mypy-zope==0.3.2
+mypy==1.0.0
+mypy-zope==0.9.1
 black==19.10b0
 isort==4.3.21
 emcache==1.0.0
