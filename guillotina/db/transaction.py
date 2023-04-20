@@ -36,7 +36,7 @@ import time
 
 
 _EMPTY = "__<EMPTY VALUE>__"
-TID_VERIFY_SKIP = {"Container", "guillotina.db.db.Root", "guillotina.registry.Registry", "User"}
+TID_VERIFY_SKIP = {"Container", "guillotina.db.db.Root", "User"}
 
 
 class ObjectResultType(TypedDict, total=False):

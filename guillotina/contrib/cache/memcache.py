@@ -58,7 +58,8 @@ def is_memory_cacheable(obj) -> bool:
 
         # Decide whether to invalidate default and custom annotations
         if not invalidate_annotations and (
-            obj["type"] == "guillotina.annotations.AnnotationData" or obj["id"] in ("default", "_registry")
+            obj["type"] in ("guillotina.annotations.AnnotationData", "guillotina.registry.Registry")
+            or obj["id"] in ("default", "_registry")
         ):
             cacheable = False
 

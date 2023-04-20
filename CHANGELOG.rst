@@ -1,6 +1,11 @@
 CHANGELOG
 =========
 
+5.4.11 (2023-04-20)
+-------------------
+
+- More updates to prevent in-memory caching of registry objects.
+
 5.4.10 (2023-03-31)
 -------------------
 
