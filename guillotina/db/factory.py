@@ -50,7 +50,7 @@ def _convert_dsn(obj):
     return txt.format(**obj)
 
 
-async def _PGConfigurationFactory(key, dbconfig, loop=None, storage_factory=PostgresqlStorage):
+async def _PGConfigurationFactory(key, dbconfig, storage_factory=PostgresqlStorage):
     if isinstance(dbconfig["dsn"], str):
         dsn = dbconfig["dsn"]
     else:
@@ -67,10 +67,7 @@ async def _PGConfigurationFactory(key, dbconfig, loop=None, storage_factory=Post
     connection_options = _get_connection_options(dbconfig)
 
     aps = storage_factory(**dbconfig)
-    if loop is not None:
-        await aps.initialize(**connection_options)
-    else:
-        await aps.initialize(**connection_options)
+    await aps.initialize(**connection_options)
 
     if "transaction_manager" in dbconfig:
         transaction_manager = resolve_dotted_name(dbconfig["transaction_manager"])
