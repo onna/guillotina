@@ -3,7 +3,7 @@ html2text==2019.8.11
 aiosmtplib==1.0.6
 pre-commit==1.18.2
 flake8==6.0.0
-codecov==2.0.15
+codecov==2.1.13
 mypy==1.0.0
 mypy-zope==0.9.1
 black==19.10b0
