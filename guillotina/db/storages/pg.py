@@ -833,17 +833,17 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
 
     async def initialize(self, loop=None, **kw):
         self._connection_options = kw
-        if self._connection_manager is None:
-            self._connection_manager = self._connection_manager_class(
-                dsn=self._dsn,
-                pool_size=self._pool_size,
-                connection_options=self._connection_options,
-                conn_acquire_timeout=self._conn_acquire_timeout,
-                vacuum_class=self._vacuum_class,
-                autovacuum=self._autovacuum,
-                db_schema=self._db_schema,
-            )
-            await self._connection_manager.initialize(loop, **kw)
+
+        self._connection_manager = self._connection_manager_class(
+            dsn=self._dsn,
+            pool_size=self._pool_size,
+            connection_options=self._connection_options,
+            conn_acquire_timeout=self._conn_acquire_timeout,
+            vacuum_class=self._vacuum_class,
+            autovacuum=self._autovacuum,
+            db_schema=self._db_schema,
+        )
+        await self._connection_manager.initialize(loop, **kw)
 
         with watch("initialize_db"):
             async with self.pool.acquire(timeout=self._conn_acquire_timeout) as conn:
