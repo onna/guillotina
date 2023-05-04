@@ -1,6 +1,11 @@
 CHANGELOG
 =========
 
+5.4.12 (2023-05-04)
+-------------------
+
+- Prevent using cache if the type field is missing.
+
 5.4.11 (2023-04-20)
 -------------------
 

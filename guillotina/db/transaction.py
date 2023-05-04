@@ -114,6 +114,8 @@ class cache:
                 result = None
             elif oid is None:
                 oid = result["zoid"]
+            if result and "type" not in result:
+                result = None
 
             # For cacheable requests containing an oid as part of the
             # key parameters, double check that the TID in cache
