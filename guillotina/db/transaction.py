@@ -114,7 +114,7 @@ class cache:
                 result = None
             elif oid is None:
                 oid = result["zoid"]
-            elif "type" not in result:
+            if "type" not in result:
                 result = None
 
             # For cacheable requests containing an oid as part of the
