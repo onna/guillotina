@@ -72,7 +72,6 @@ setup(
         "argon2-cffi",
         "backoff",
         "urllib3>=1.20,<2",
-        "requests<2.2.29",
         "brotli",
     ],
     extras_require={
