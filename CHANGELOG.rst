@@ -1,5 +1,9 @@
 CHANGELOG
 =========
+5.4.13 (2023-07-25)
+-------------------
+
+- Use txn conn for getting/setting TID sequence since it's not affected by transaction.
 
 5.4.12 (2023-05-04)
 -------------------

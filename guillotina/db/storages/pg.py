@@ -1045,13 +1045,13 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
 
     @restart_conn_on_exception
     async def get_next_tid(self, txn):
-        async with self.pool.acquire(timeout=self._conn_acquire_timeout) as conn:
+        async with self.acquire(txn) as conn:
             with watch("next_tid"):
                 return await conn.fetchval(self._next_tid_sql.format(schema=self._db_schema))
 
     @restart_conn_on_exception
     async def get_current_tid(self, txn):
-        async with self.pool.acquire(timeout=self._conn_acquire_timeout) as conn:
+        async with self.acquire(txn) as conn:
             with watch("current_tid"):
                 return await conn.fetchval(self._max_tid_sql.format(schema=self._db_schema))
 
