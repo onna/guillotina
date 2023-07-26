@@ -68,6 +68,9 @@ class DummyStorage(BaseStorage):  # type: ignore
     async def start_transaction(self, txn):
         pass
 
+    async def cleanup_transaction(self, txn):
+        pass
+
     def get_txn(self, txn):
         if not getattr(txn, "_db_txn", None):
             txn._db_txn = {"added": {}, "removed": []}
