@@ -1,5 +1,4 @@
 from asyncio import shield
-from contextlib import asyncontextmanager
 from guillotina import glogging
 from guillotina import metrics
 from guillotina._settings import app_settings
@@ -1019,13 +1018,8 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
         if self._connection_manager._vacuum is not None:
             await self._connection_manager._vacuum.add_to_queue(oid, self._objects_table_name)
 
-    @asynccontextmanager
-    async def acquire(self, txn):
-        if txn._db_conn:
-            yield txn._db_conn
-        else:
-            async with self.pool.acquire(timeout=self._conn_acquire_timeout) as conn:
-                yield conn
+    def acquire(self, txn):
+        return TransactionConnectionContextManager(self, txn)
 
     async def delete(self, txn, oid):
         obj = await get_object_by_uid(oid)
