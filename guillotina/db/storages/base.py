@@ -52,9 +52,6 @@ class BaseStorage:
     async def start_transaction(self, txn, retries=0):
         raise NotImplemented()  # pragma: no cover
 
-    async def cleanup_transaction(self, txn):
-        raise NotImplemented()  # pragma: no cover
-
     async def get_conflicts(self, txn):
         raise NotImplemented()  # pragma: no cover
 

@@ -537,7 +537,6 @@ class Transaction:
         if not self.read_only:
             await self.storage.commit(self)
         await self._cache.close()
-        await self.storage.cleanup_transaction(self)
         self.tpc_cleanup()
 
     def tpc_cleanup(self):

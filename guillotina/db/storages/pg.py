@@ -1,5 +1,4 @@
 from asyncio import shield
-from contextlib import asynccontextmanager
 from guillotina import glogging
 from guillotina import metrics
 from guillotina._settings import app_settings
@@ -623,6 +622,29 @@ class PGConnectionManager:
         await self._initialize_tid_statements()
 
 
+class TransactionConnectionContextManager:
+    """
+    Connection manager to either use reserved
+    transaction connection or use a connection
+    from pool
+    """
+
+    def __init__(self, storage, txn):
+        self.storage = storage
+        self.txn = txn
+        self.connection = None
+
+    async def __aenter__(self):
+        if self.txn._db_conn:
+            return self.txn._db_conn
+        self.txn._db_conn = await self.storage.pool.acquire(timeout=self.storage._conn_acquire_timeout)
+        return self.txn._db_conn
+
+    async def __aexit__(self, *exc):
+        if self.connection is not None:
+            await self.storage.pool.release(self.connection)
+
+
 @implementer(IPostgresStorage)
 class PostgresqlStorage(BaseStorage):
     """Storage to a relational database, based on invalidation polling"""
@@ -715,7 +737,6 @@ class PostgresqlStorage(BaseStorage):
         self._sql = SQLStatements()
         self._connection_manager = connection_manager
         self._autovacuum = autovacuum
-        self._connection = None
 
     async def finalize(self):
         await self._connection_manager.close()
@@ -997,18 +1018,8 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
         if self._connection_manager._vacuum is not None:
             await self._connection_manager._vacuum.add_to_queue(oid, self._objects_table_name)
 
-    @asynccontextmanager
-    async def acquire(self, txn):
-        # The transaction should (almost always) have a connection already, because
-        # the transaction entrance code opens a connection.
-        if txn._db_conn:
-            yield txn._db_conn
-            return
-
-        # If we don't have a connection tied to the transaction, then something strange is
-        # happening, so we'll just acquire a new connection that is released when finished.
-        async with self.storage.pool.acquire(timeout=self.storage._conn_acquire_timeout) as conn:
-            yield conn
+    def acquire(self, txn):
+        return TransactionConnectionContextManager(self, txn)
 
     async def delete(self, txn, oid):
         obj = await get_object_by_uid(oid)
@@ -1098,12 +1109,6 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
                 await self.close(conn)
                 txn._db_conn = await self.open()
                 return await self.start_transaction(txn, retries + 1)
-
-    async def cleanup_transaction(self, txn):
-        # This shouldn't be necessary since the transaction code handles
-        # closing connections, but let's be good citizens and double-check.
-        if txn._db_conn:
-            await self.close(txn._db_conn)
 
     async def get_conflicts(self, txn):
         if len(txn.modified) == 0:
