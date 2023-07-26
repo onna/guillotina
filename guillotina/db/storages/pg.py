@@ -1007,7 +1007,7 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
 
         # If we don't have a connection tied to the transaction, then something strange is
         # happening, so we'll just acquire a new connection that is released when finished.
-        async with self.pool.acquire(timeout=self.storage._conn_acquire_timeout) as conn:
+        async with self.pool.acquire(timeout=self._conn_acquire_timeout) as conn:
             yield conn
 
     async def delete(self, txn, oid):
