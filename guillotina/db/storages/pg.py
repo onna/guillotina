@@ -632,17 +632,17 @@ class TransactionConnectionContextManager:
     def __init__(self, storage, txn):
         self.storage = storage
         self.txn = txn
-        self.connection = None
+        self.conn = None
 
     async def __aenter__(self):
         if self.txn._db_conn:
             return self.txn._db_conn
-        self.txn._db_conn = await self.storage.pool.acquire(timeout=self.storage._conn_acquire_timeout)
-        return self.txn._db_conn
+        self.conn = await self.storage.pool.acquire(timeout=self.storage._conn_acquire_timeout)
+        return self.conn
 
     async def __aexit__(self, *exc):
-        if self.connection is not None:
-            await self.storage.pool.release(self.connection)
+        if self.conn is not None:
+            await self.storage.pool.release(self.conn)
 
 
 @implementer(IPostgresStorage)
