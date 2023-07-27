@@ -82,6 +82,9 @@ class BaseStorage:
     async def get_annotation(self, txn, oid, id):
         raise NotImplemented()  # pragma: no cover
 
+    async def get_annotations(self, txn, oid, ids):
+        raise NotImplemented()  # pragma: no cover
+
     async def get_annotation_keys(self, txn, oid):
         raise NotImplemented()  # pragma: no cover
 
