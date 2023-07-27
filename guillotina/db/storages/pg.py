@@ -189,6 +189,16 @@ WHERE
 """,
 )
 
+register_sql(
+    "GET_ANNOTATIONS",
+    f"""
+SELECT zoid, tid, state_size, resource, type, state, id, parent_id, of
+FROM {{table_name}}
+WHERE of = $1::varchar({MAX_UID_LENGTH})
+  AND id = ANY($2::text[])
+""",
+)
+
 
 def _wrap_return_count(txt):
     return """WITH rows AS (
@@ -632,17 +642,17 @@ class TransactionConnectionContextManager:
     def __init__(self, storage, txn):
         self.storage = storage
         self.txn = txn
-        self.connection = None
+        self.conn = None
 
     async def __aenter__(self):
-        if self.txn.connection_reserved:
+        if self.txn._db_conn:
             return self.txn._db_conn
-        self.connection = await self.storage.pool.acquire(timeout=self.storage._conn_acquire_timeout)
-        return self.connection
+        self.conn = await self.storage.pool.acquire(timeout=self.storage._conn_acquire_timeout)
+        return self.conn
 
     async def __aexit__(self, *exc):
-        if self.connection is not None:
-            await self.storage.pool.release(self.connection)
+        if self.conn is not None:
+            await self.storage.pool.release(self.conn)
 
 
 @implementer(IPostgresStorage)
@@ -932,10 +942,10 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
         return result["tid"]
 
     @profilable
-    async def store(self, oid, old_serial, writer, obj, txn):
+    async def store(self, oid, old_serial, writer, serialized, obj, txn):
         assert oid is not None
+        pickled, cache_value = serialized
 
-        pickled, cache_value = await writer.serialize()  # This calls __getstate__ of obj
         if len(pickled) >= self._large_record_size:
             log.info(f"Large object {obj.__class__}: {len(pickled)}")
         if self._store_json:
@@ -1228,6 +1238,22 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
             result = dict(result)
             result["state"] = await app_settings["state_reader"](result)
         return result
+
+    async def get_annotations(self, txn, oid, ids):
+        sql = self._sql.get("GET_ANNOTATIONS", self._objects_table_name)
+        futures = []
+        annotations = []
+        async with self.acquire(txn) as conn:
+            records = await conn.fetch(sql, oid, ids)
+            for record in records:
+                if record["parent_id"] == TRASHED_ID:
+                    continue
+                annotations.append(dict(record))
+                futures.append(app_settings["state_reader"](record))
+        state_data = await asyncio.gather(*futures)
+        for idx in range(len(annotations)):
+            annotations[idx]["state"] = state_data[idx]
+        return {annotation["id"]: annotation for annotation in annotations}
 
     async def get_annotation_keys(self, txn, oid):
         sql = self._sql.get("GET_ANNOTATIONS_KEYS", self._objects_table_name)

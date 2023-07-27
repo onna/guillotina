@@ -34,7 +34,7 @@ class BaseStorage:
     async def get_obj_tid(self, txn, oid):
         raise NotImplemented()  # pragma: no cover
 
-    async def store(self, oid, old_serial, writer, obj, txn):
+    async def store(self, oid, old_serial, writer, serialized, obj, txn):
         raise NotImplemented()  # pragma: no cover
 
     async def delete(self, txn, oid):
@@ -80,6 +80,9 @@ class BaseStorage:
         raise NotImplemented()  # pragma: no cover
 
     async def get_annotation(self, txn, oid, id):
+        raise NotImplemented()  # pragma: no cover
+
+    async def get_annotations(self, txn, oid, ids):
         raise NotImplemented()  # pragma: no cover
 
     async def get_annotation_keys(self, txn, oid):

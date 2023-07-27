@@ -179,12 +179,14 @@ class Database:
                 root.__txn__ = txn
                 if root.__db_id__ is None:
                     root.__db_id__ = self.__db_id__
-                    await tm._storage.store(ROOT_ID, 0, IWriter(root), root, txn)
+                    writer = IWriter(root)
+                    await tm._storage.store(ROOT_ID, 0, writer, await writer.serialize(), root, txn)
         except KeyError:
             from guillotina.db.db import Root
 
             root = Root(self.__db_id__)
-            await tm._storage.store(ROOT_ID, 0, IWriter(root), root, txn)
+            writer = IWriter(root)
+            await tm._storage.store(ROOT_ID, 0, writer, await writer.serialize(), root, txn)
         finally:
             await tm.commit(txn=txn)
 
