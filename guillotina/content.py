@@ -648,7 +648,7 @@ async def get_all_behaviors(content, create=False, load=True) -> list:
     data_keys = {}
     for inst in instances:
         if hasattr(inst, "__annotations_data_key__"):
-            data_keys[inst] = inst
+            data_keys[inst.__annotations_data_key__] = inst
     if data_keys:
         txn = get_transaction()
         annotation_data = await txn.get_annotations(content, list(data_keys))
