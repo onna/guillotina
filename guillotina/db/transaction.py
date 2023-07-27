@@ -478,7 +478,7 @@ class Transaction:
         self._before_commit = []
 
     @profilable
-    async def _store_object(self, obj, uid, added=False):
+    async def _store_object(self, obj, uid, added=False, update_not_new=False):
         # There is no serial
         if added:
             serial = None
@@ -491,6 +491,8 @@ class Transaction:
         obj.__uuid__ = uid
         if obj.__txn__ is None:
             obj.__txn__ = self
+        if update_not_new:
+            obj.__new_marker__ = False
 
     async def initialize_tid(self) -> None:
         if self._tid is not None:
@@ -511,11 +513,12 @@ class Transaction:
 
         for oid, obj in self.deleted.items():
             await self._manager._storage.delete(self, oid)
+        futures = []
         for oid, obj in self.added.items():
-            await self._store_object(obj, oid, True)
-            obj.__new_marker__ = False
+            futures.append(self._store_object(obj, oid, True, update_not_new=True))
         for oid, obj in self.modified.items():
-            await self._store_object(obj, oid)
+            futures.append(self._store_object(obj, oid))
+        await asyncio.gather(*futures)
 
     @profilable
     async def tpc_vote(self):
