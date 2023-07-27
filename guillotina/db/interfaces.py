@@ -299,6 +299,11 @@ class IStorage(Interface):
         get annotation
         """
 
+    async def get_annotations(txn, oid, ids):
+        """
+        get annotations
+        """
+
     async def get_annotation_keys(txn, oid):
         """
         get annotation keys
