@@ -942,10 +942,10 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
         return result["tid"]
 
     @profilable
-    async def store(self, oid, old_serial, writer, obj, txn):
+    async def store(self, oid, old_serial, writer, serialized, obj, txn):
         assert oid is not None
+        pickled, cache_value = serialized
 
-        pickled, cache_value = await writer.serialize()  # This calls __getstate__ of obj
         if len(pickled) >= self._large_record_size:
             log.info(f"Large object {obj.__class__}: {len(pickled)}")
         if self._store_json:

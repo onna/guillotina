@@ -73,9 +73,9 @@ class DummyStorage(BaseStorage):  # type: ignore
             txn._db_txn = {"added": {}, "removed": []}
         return txn._db_txn
 
-    async def store(self, oid, old_serial, writer, obj, txn):
+    async def store(self, oid, old_serial, writer, serialized, obj, txn):
         assert oid is not None
-        p, _ = await writer.serialize()  # This calls __getstate__ of obj
+        p, _ = serialized
         json = await writer.get_json()
         part = writer.part
         if part is None:

@@ -164,8 +164,7 @@ class TestPGMetrics:
         txn = self._make_txn()
         txn.get_connection.return_value.fetch.return_value = [{"count": 1}]
         writer = AsyncMock()
-        writer.serialize = AsyncMock(return_value=(b"test", b"test"))
-        await storage.store("foobar", 1, writer, ob, txn)
+        await storage.store("foobar", 1, writer, (b"test", b"test"), ob, txn)
         assert (
             metrics_registry.get_sample_value(
                 "guillotina_db_pg_ops_total", {"type": "store_object", "error": "none"}
@@ -192,7 +191,7 @@ class TestPGMetrics:
             txn.get_connection.return_value.fetch.return_value = [{"count": 1}]
             txn._manager._hard_cache.get.return_value = None
             with patch("guillotina.db.storages.pg.get_object_by_uid", return_value=ob):
-                await storage.store("foobar", 1, writer, ob, txn)
+                await storage.store("foobar", 1, writer, (b"test", b"test"), ob, txn)
                 await storage.delete(txn, "foobar")
                 assert (
                     metrics_registry.get_sample_value(

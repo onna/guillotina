@@ -478,15 +478,13 @@ class Transaction:
         self._before_commit = []
 
     @profilable
-    async def _store_object(self, obj, uid, added=False, update_not_new=False):
+    async def _store_object(self, obj, uid, writer, serialized, added=False, update_not_new=False):
         # There is no serial
         if added:
             serial = None
         else:
             serial = getattr(obj, "__serial__", None) or 0
-
-        writer = IWriter(obj)
-        await self._manager._storage.store(uid, serial, writer, obj, self)
+        await self._manager._storage.store(uid, serial, writer, serialized, obj, self)
         obj.__serial__ = self._tid
         obj.__uuid__ = uid
         if obj.__txn__ is None:
@@ -513,12 +511,32 @@ class Transaction:
 
         for oid, obj in self.deleted.items():
             await self._manager._storage.delete(self, oid)
-        futures = []
-        for oid, obj in self.added.items():
-            futures.append(self._store_object(obj, oid, True, update_not_new=True))
-        for oid, obj in self.modified.items():
-            futures.append(self._store_object(obj, oid))
-        await asyncio.gather(*futures)
+
+        # Get the writer objects for each object, then call the serialize()
+        added_oids = list(self.added)
+        modified_oids = list(self.modified)
+        added_writers = [IWriter(self.added[oid]) for oid in added_oids]
+        modified_writers = [IWriter(self.modified[oid]) for oid in modified_oids]
+        serialized = []
+        if added_writers or modified_writers:
+            futures = [writer.serialize() for writer in added_writers + modified_writers]
+            serialized = await asyncio.gather(*futures)
+        for idx in range(len(added_oids)):
+            await self._store_object(
+                self.added[added_oids[idx]],
+                added_oids[idx],
+                added_writers[idx],
+                serialized[idx],
+                True,
+                update_not_new=True,
+            )
+        for idx in range(len(modified_oids)):
+            await self._store_object(
+                self.modified[modified_oids[idx]],
+                modified_oids[idx],
+                modified_writers[idx],
+                serialized[idx + len(added_oids)],
+            )
 
     @profilable
     async def tpc_vote(self):
