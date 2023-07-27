@@ -1,4 +1,5 @@
 from collections import OrderedDict
+from lru import LRU
 from guillotina import task_vars
 from guillotina._settings import app_settings
 from guillotina.component import query_adapter
@@ -212,7 +213,7 @@ class Transaction:
         self._cache = cache or query_adapter(self, ITransactionCache, name=app_settings["cache"]["strategy"])
         self._query_count_start = self._query_count_end = 0
 
-        self._annotation_cache = {}
+        self._annotation_cache = LRU(100)
 
     def get_query_count(self):
         """
@@ -547,7 +548,7 @@ class Transaction:
         self.modified = {}
         self.deleted = {}
         self._db_txn = None
-        self._annotation_cache = {}
+        self._annotation_cache = LRU(100)
 
     # Inspection
 
