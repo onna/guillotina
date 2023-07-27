@@ -37,7 +37,7 @@ class AnnotationBehavior:
     async def load(self, create=False):
         annotations_container = IAnnotations(self.__dict__["context"])
         data = annotations_container.get(self.__annotations_data_key__, _default)
-        if data is not _default:
+        if data is not _default and data is not None:
             # data is already preloaded, we do not need to get from db again...
             self.__dict__["data"] = data
             return
@@ -66,6 +66,8 @@ class AnnotationBehavior:
         return data[key_name]
 
     def __setattr__(self, name, value):
+        if self.__dict__["data"] is None:
+            self.__dict__["data"] = {}
         if (
             name not in self.__dict__["schema"]
             or name.startswith("__")

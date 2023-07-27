@@ -189,6 +189,16 @@ WHERE
 """,
 )
 
+register_sql(
+    "GET_ANNOTATIONS",
+    f"""
+SELECT zoid, tid, state_size, resource, type, state, id, parent_id, of
+FROM {{table_name}}
+WHERE of = $1::varchar({MAX_UID_LENGTH})
+  AND id = ANY($2::text[])
+""",
+)
+
 
 def _wrap_return_count(txt):
     return """WITH rows AS (
@@ -1228,6 +1238,22 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
             result = dict(result)
             result["state"] = await app_settings["state_reader"](result)
         return result
+
+    async def get_annotations(self, txn, oid, ids):
+        sql = self._sql.get("GET_ANNOTATIONS", self._objects_table_name)
+        futures = []
+        annotations = []
+        async with self.acquire(txn) as conn:
+            records = await conn.fetch(sql, oid, ids)
+            for record in records:
+                if record["parent_id"] == TRASHED_ID:
+                    continue
+                annotations.append(dict(record))
+                futures.append(app_settings["state_reader"](record))
+        state_data = await asyncio.gather(*futures)
+        for idx in range(len(annotations)):
+            annotations[idx]["state"] = state_data[idx]
+        return {annotation["id"]: annotation for annotation in annotations}
 
     async def get_annotation_keys(self, txn, oid):
         sql = self._sql.get("GET_ANNOTATIONS_KEYS", self._objects_table_name)

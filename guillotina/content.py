@@ -641,14 +641,29 @@ def get_all_behavior_interfaces(content) -> list:
 
 
 async def get_all_behaviors(content, create=False, load=True) -> list:
+    schemas = get_all_behavior_interfaces(content)
+    instances = [schema(content) for schema in schemas]
+
+    # Pre-load the annotations as a batch from the DB.
+    data_keys = {}
+    for inst in instances:
+        if hasattr(inst, "__annotations_data_key__"):
+            data_keys[inst] = inst
+    if data_keys:
+        txn = get_transaction()
+        annotation_data = await txn.get_annotations(content, list(data_keys))
+        for key, data in annotation_data.items():
+            content.__gannotations__[key] = data
+
+    # Load all (for all non-preload items, this takes care of initialization).
     behaviors = []
-    for behavior_schema in get_all_behavior_interfaces(content):
-        behavior = behavior_schema(content)
+    for idx in range(len(schemas)):
+        behavior = instances[idx]
         if load:
             if IAsyncBehavior.implementedBy(behavior.__class__):  # pylint: disable=E1120
                 # providedBy not working here?
                 await behavior.load(create=create)
-        behaviors.append((behavior_schema, behavior))
+        behaviors.append((schemas[idx], behavior))
     return behaviors
 
 

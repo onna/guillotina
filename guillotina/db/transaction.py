@@ -212,6 +212,8 @@ class Transaction:
         self._cache = cache or query_adapter(self, ITransactionCache, name=app_settings["cache"]["strategy"])
         self._query_count_start = self._query_count_end = 0
 
+        self._annotation_cache = {}
+
     def get_query_count(self):
         """
         diff versions of asyncpg
@@ -545,6 +547,7 @@ class Transaction:
         self.modified = {}
         self.deleted = {}
         self._db_txn = None
+        self._annotation_cache = {}
 
     # Inspection
 
@@ -653,6 +656,9 @@ class Transaction:
 
     @profilable
     async def get_annotation(self, base_obj, id, reader=None):
+        cache_key = f"{base_obj.__uuid__}::{id}"
+        if cache_key in self._annotation_cache:
+            return self._annotation_cache[cache_key]
         result = await self._get_annotation(base_obj, id)
         if result == _EMPTY:
             raise KeyError(id)
@@ -662,7 +668,37 @@ class Transaction:
             obj = await reader(result)
         obj.__of__ = base_obj.__uuid__
         obj.__txn__ = self
+        self._annotation_cache[cache_key] = obj
         return obj
+
+    @profilable
+    async def get_annotations(self, base_obj, ids, reader=None):
+        cached = {}
+        to_fetch = []
+        for _id in ids:
+            cache_key = f"{base_obj.__uuid__}::{_id}"
+            if cache_key in self._annotation_cache:
+                cached[_id] = self._annotation_cache[cache_key]
+            else:
+                to_fetch.append(_id)
+        if not to_fetch:
+            return cached
+
+        # One query fetch all remaining annotations.
+        raw_data = await self._manager._storage.get_annotations(self, base_obj.__uuid__, to_fetch)
+        if not raw_data:
+            return cached
+
+        # Read the state data.
+        if not reader:
+            reader = app_settings["object_reader"]
+        keys = list(raw_data)
+        futures = [reader(raw_data[key]) for key in keys]
+        state_data = await asyncio.gather(*futures)
+        for data in state_data:
+            data.__of__ = base_obj.__uuid__
+            data.__txn__ = self
+        return {**cached, **{keys[idx]: state_data[idx] for idx in range(len(keys))}}
 
     @profilable
     @cache(lambda oid: {"oid": oid, "variant": "annotation-keys"})

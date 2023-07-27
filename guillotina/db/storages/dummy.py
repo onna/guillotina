@@ -190,6 +190,13 @@ class DummyStorage(BaseStorage):  # type: ignore
     async def get_annotation(self, txn, oid, id):
         return await self.load(txn, self._db[oid]["ofs"][id])
 
+    async def get_annotations(self, txn, oid, ids):
+        return {
+            id_: await self.get_annotation(txn, oid, id_)
+            for id_ in ids
+            if id_ in self._db.get(oid, {}).get("ofs", {})
+        }
+
     async def get_annotation_keys(self, txn, oid):
         keys = []
         for of_id in self._db[oid]["ofs"].values():
