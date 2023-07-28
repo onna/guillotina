@@ -719,11 +719,7 @@ class Transaction:
         for data in state_data:
             data.__of__ = base_obj.__uuid__
             data.__txn__ = self
-        result = {**cached, **{keys[idx]: state_data[idx] for idx in range(len(keys))}}
-        for key in ids:
-            cache_key = f"{base_obj.__uuid__}::{_id}"
-            self._annotation_cache[cache_key] = result.get(key, {})
-        return result
+        return {**cached, **{keys[idx]: state_data[idx] for idx in range(len(keys))}}
 
     def clear_annotation_cache(self, base_obj, _id):
         try:
