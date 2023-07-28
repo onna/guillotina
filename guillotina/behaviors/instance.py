@@ -47,6 +47,7 @@ class AnnotationBehavior:
                 annotations = AnnotationData()
                 await annotations_container.async_set(self.__annotations_data_key__, annotations)
             else:
+                self.__dict__["context"].__gannotations__[self.__annotations_data_key__] = AnnotationData()
                 annotations = {}  # fallback, assumed only for reading here...
         self.__dict__["data"] = annotations
 
