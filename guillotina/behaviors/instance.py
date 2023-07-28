@@ -41,7 +41,6 @@ class AnnotationBehavior:
             # data is already preloaded, we do not need to get from db again...
             self.__dict__["data"] = data
             return
-
         annotations = await annotations_container.async_get(self.__annotations_data_key__)
         if annotations is None:
             if create:

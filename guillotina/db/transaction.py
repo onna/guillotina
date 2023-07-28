@@ -418,7 +418,6 @@ class Transaction:
         if obj.__immutable_cache__:
             # ttl of zero means we want to provide a hard cache here
             self._manager._hard_cache[oid] = result
-
         return obj
 
     async def commit(self) -> None:
@@ -709,6 +708,8 @@ class Transaction:
         # One query fetch all remaining annotations.
         raw_data = await self._manager._storage.get_annotations(self, base_obj.__uuid__, to_fetch)
         if not raw_data:
+            for key in ids:
+                self._annotation_cache[f"{base_obj.__uuid__}::{key}"] = {}
             return cached
 
         # Read the state data.
@@ -720,7 +721,11 @@ class Transaction:
         for data in state_data:
             data.__of__ = base_obj.__uuid__
             data.__txn__ = self
-        return {**cached, **{keys[idx]: state_data[idx] for idx in range(len(keys))}}
+        result = {**cached, **{keys[idx]: state_data[idx] for idx in range(len(keys))}}
+        for key in ids:
+            cache_key = f"{base_obj.__uuid__}::{_id}"
+            self._annotation_cache[cache_key] = result.get(key, {})
+        return result
 
     @profilable
     @cache(lambda oid: {"oid": oid, "variant": "annotation-keys"})

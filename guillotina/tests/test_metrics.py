@@ -1,5 +1,4 @@
 from asyncmock import AsyncMock
-from asyncpg.protocol.protocol import _create_record as Record
 from guillotina import metrics
 from guillotina._settings import app_settings
 from guillotina.const import ROOT_ID
@@ -140,7 +139,7 @@ class TestPGMetrics:
         async def _acquire(_):
             yield conn
 
-        storage.acquire = _acquire  # AsyncMock(return_value=conn)
+        storage.acquire = _acquire
         app_settings["state_reader"] = AsyncMock(return_value=b"")
         await storage.load(self._make_txn(), "foobar")
         assert (
@@ -231,6 +230,7 @@ async def test_dummy_watch():
 
 class TestTransactionMetrics:
     async def test_record_transaction_cache_hit(self, dummy_guillotina, metrics_registry):
+        app_settings["state_reader"] = AsyncMock(return_value=pickle.dumps(create_content()))
         storage = AsyncMock()
         mng = TransactionManager(storage)
         cache = AsyncMock()
@@ -240,11 +240,13 @@ class TestTransactionMetrics:
             "zoid": "foobar",
             "tid": 1,
             "id": "foobar",
+            "type": "Resource",
         }
         strategy = AsyncMock()
         txn = Transaction(mng, cache=cache, strategy=strategy)
 
         mng._storage.get_obj_tid.return_value = 1
+        mng._storage.load = AsyncMock(return_value=cache.get.return_value)
         await txn.get("foobar")
 
         assert (
@@ -262,11 +264,13 @@ class TestTransactionMetrics:
             "zoid": ROOT_ID,
             "tid": 1,
             "id": "foobar",
+            "type": "Container",
         }
         strategy = AsyncMock()
         txn = Transaction(mng, cache=cache, strategy=strategy)
 
         mng._storage.get_obj_tid.return_value = 1
+        mng._storage.load = AsyncMock(return_value=cache.get.return_value)
         await txn.get("foobar")
 
         assert (
@@ -286,15 +290,18 @@ class TestTransactionMetrics:
         mng = TransactionManager(storage)
         cache = AsyncMock()
 
-        mock_ob = Record(
-            {"state": 0, "zoid": 1, "tid": 2, "id": 3},
-            (pickle.dumps(create_content(Container)), ROOT_ID, 1, "foobar"),
-        )
-        cache.get.return_value = mock_ob
+        cache.get.return_value = {
+            "state": pickle.dumps(create_content(Container)),
+            "zoid": ROOT_ID,
+            "tid": 2,
+            "id": "root",
+            "type": "Container",
+        }
         strategy = AsyncMock()
         txn = Transaction(mng, cache=cache, strategy=strategy)
 
         mng._storage.get_obj_tid.return_value = 1
+        mng._storage.load = AsyncMock(return_value=cache.get.return_value)
         await txn.get("foobar")
 
         assert (
@@ -343,13 +350,14 @@ class TestTransactionMetrics:
             "zoid": "foobar",
             "tid": 1,
             "id": "foobar",
+            "type": "Resource",
         }
         strategy = AsyncMock()
         txn = Transaction(mng, cache=cache, strategy=strategy)
 
         ob = create_content()
         mng._storage.get_obj_tid.return_value = 1
-
+        mng._storage.load = AsyncMock(return_value=cache.get.return_value)
         await txn.get_child(ob, "foobar")
 
         assert (
@@ -369,13 +377,14 @@ class TestTransactionMetrics:
             "zoid": "foobar",
             "tid": 1,
             "id": "foobar",
+            "type": "Resource",
         }
         strategy = AsyncMock()
         txn = Transaction(mng, cache=cache, strategy=strategy)
 
         ob = create_content(Container)
         mng._storage.get_obj_tid.return_value = 1
-
+        mng._storage.load = AsyncMock(return_value=cache.get.return_value)
         await txn.get_child(ob, "foobar")
 
         assert (
