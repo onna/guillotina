@@ -640,7 +640,7 @@ def get_all_behavior_interfaces(content) -> list:
     return behaviors
 
 
-async def get_all_behaviors(content, create=False, load=True) -> list:
+async def get_all_behaviors(content, create=False, load=True, preload_only=False) -> list:
     schemas = get_all_behavior_interfaces(content)
     instances = [schema(content) for schema in schemas]
 
@@ -652,8 +652,12 @@ async def get_all_behaviors(content, create=False, load=True) -> list:
     if data_keys:
         txn = get_transaction()
         annotation_data = await txn.get_annotations(content, list(data_keys))
-        for key, data in annotation_data.items():
-            content.__gannotations__[key] = data
+        for inst in instances:
+            key = getattr(inst, "__annotations_data_key__", None)
+            if key and key in annotation_data:
+                content.__gannotations__[key] = annotation_data[key]
+    if preload_only:
+        return
 
     # Load all (for all non-preload items, this takes care of initialization).
     behaviors = []

@@ -418,7 +418,6 @@ class Transaction:
         if obj.__immutable_cache__:
             # ttl of zero means we want to provide a hard cache here
             self._manager._hard_cache[oid] = result
-
         return obj
 
     async def commit(self) -> None:
@@ -679,10 +678,13 @@ class Transaction:
     @profilable
     async def get_annotation(self, base_obj, id, reader=None):
         cache_key = f"{base_obj.__uuid__}::{id}"
+        result = None
         if cache_key in self._annotation_cache:
-            return self._annotation_cache[cache_key]
-        result = await self._get_annotation(base_obj, id)
+            result = self._annotation_cache[cache_key]
+        if not result:
+            result = await self._get_annotation(base_obj, id)
         if result == _EMPTY:
+            self._annotation_cache[cache_key] = _EMPTY
             raise KeyError(id)
         if reader is None:
             obj = await app_settings["object_reader"](result)
@@ -699,7 +701,7 @@ class Transaction:
         to_fetch = []
         for _id in ids:
             cache_key = f"{base_obj.__uuid__}::{_id}"
-            if cache_key in self._annotation_cache:
+            if cache_key in self._annotation_cache and self._annotation_cache[cache_key] != _EMPTY:
                 cached[_id] = self._annotation_cache[cache_key]
             else:
                 to_fetch.append(_id)
@@ -721,6 +723,12 @@ class Transaction:
             data.__of__ = base_obj.__uuid__
             data.__txn__ = self
         return {**cached, **{keys[idx]: state_data[idx] for idx in range(len(keys))}}
+
+    def clear_annotation_cache(self, base_obj, _id):
+        try:
+            del self._annotation_cache[f"{base_obj.__uuid__}::{_id}"]
+        except KeyError:
+            ...
 
     @profilable
     @cache(lambda oid: {"oid": oid, "variant": "annotation-keys"})

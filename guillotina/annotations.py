@@ -48,11 +48,12 @@ class AnnotationsAdapter:
         if element is _marker:
             # Get from DB
             txn = self._get_transaction()
+            obj = None
             if txn is not None:
                 try:
                     obj = await txn.get_annotation(self.obj, key, reader=reader)
                 except KeyError:
-                    obj = None
+                    ...
                 if obj is not None:
                     annotations[key] = obj
         if key in annotations:
@@ -74,6 +75,7 @@ class AnnotationsAdapter:
         value.__new_marker__ = True
         # we register the value
         txn = self._get_transaction()
+        txn.clear_annotation_cache(self.obj, key)
         value.__txn__ = txn
         txn.register(value)
         logger.debug("registering annotation {}({}), of: {}".format(value.__uuid__, key, value.__of__))
