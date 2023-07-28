@@ -654,8 +654,8 @@ async def get_all_behaviors(content, create=False, load=True) -> list:
         annotation_data = await txn.get_annotations(content, list(data_keys))
         for inst in instances:
             key = getattr(inst, "__annotations_data_key__", None)
-            if key:
-                content.__gannotations__[key] = annotation_data.get(key, AnnotationData())
+            if key and key in annotation_data:
+                content.__gannotations__[key] = annotation_data[key]
 
     # Load all (for all non-preload items, this takes care of initialization).
     behaviors = []

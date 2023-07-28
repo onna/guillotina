@@ -708,8 +708,6 @@ class Transaction:
         # One query fetch all remaining annotations.
         raw_data = await self._manager._storage.get_annotations(self, base_obj.__uuid__, to_fetch)
         if not raw_data:
-            for key in ids:
-                self._annotation_cache[f"{base_obj.__uuid__}::{key}"] = {}
             return cached
 
         # Read the state data.
