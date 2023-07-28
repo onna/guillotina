@@ -678,10 +678,13 @@ class Transaction:
     @profilable
     async def get_annotation(self, base_obj, id, reader=None):
         cache_key = f"{base_obj.__uuid__}::{id}"
+        result = None
         if cache_key in self._annotation_cache:
-            return self._annotation_cache[cache_key]
-        result = await self._get_annotation(base_obj, id)
+            result = self._annotation_cache[cache_key]
+        if not result:
+            result = await self._get_annotation(base_obj, id)
         if result == _EMPTY:
+            self._annotation_cache[cache_key] = _EMPTY
             raise KeyError(id)
         if reader is None:
             obj = await app_settings["object_reader"](result)
@@ -698,7 +701,7 @@ class Transaction:
         to_fetch = []
         for _id in ids:
             cache_key = f"{base_obj.__uuid__}::{_id}"
-            if cache_key in self._annotation_cache:
+            if cache_key in self._annotation_cache and self._annotation_cache[cache_key] != _EMPTY:
                 cached[_id] = self._annotation_cache[cache_key]
             else:
                 to_fetch.append(_id)

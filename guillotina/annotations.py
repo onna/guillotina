@@ -48,11 +48,12 @@ class AnnotationsAdapter:
         if element is _marker:
             # Get from DB
             txn = self._get_transaction()
+            obj = None
             if txn is not None:
                 try:
                     obj = await txn.get_annotation(self.obj, key, reader=reader)
                 except KeyError:
-                    obj = None
+                    ...
                 if obj is not None:
                     annotations[key] = obj
         if key in annotations:
