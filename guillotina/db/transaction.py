@@ -720,10 +720,13 @@ class Transaction:
             data.__of__ = base_obj.__uuid__
             data.__txn__ = self
         result = {**cached, **{keys[idx]: state_data[idx] for idx in range(len(keys))}}
-        for key in ids:
-            cache_key = f"{base_obj.__uuid__}::{_id}"
-            self._annotation_cache[cache_key] = result.get(key, {})
         return result
+
+    def clear_annotation_cache(self, base_obj, _id):
+        try:
+            del self._annotation_cache[f"{base_obj.__uuid__}::{_id}"]
+        except KeyError:
+            ...
 
     @profilable
     @cache(lambda oid: {"oid": oid, "variant": "annotation-keys"})
