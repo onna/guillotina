@@ -692,7 +692,7 @@ class Transaction:
             obj = await reader(result)
         obj.__of__ = base_obj.__uuid__
         obj.__txn__ = self
-        self._annotation_cache[cache_key] = obj
+        self._annotation_cache[cache_key] = result
         return obj
 
     @profilable

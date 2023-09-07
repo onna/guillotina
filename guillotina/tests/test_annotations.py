@@ -27,6 +27,18 @@ async def test_create_annotation(db, guillotina_main):
         container = await db.async_get("container")
         ob = await container.async_get("foobar")
         annotations = IAnnotations(ob)
+        data = await annotations.async_get("foobar")
+        assert data == {"foo": "bar"}
+
+        ob.__gannotations__ = {}
+
+        data = await annotations.async_get("foobar")
+        assert data == {"foo": "bar"}
+
+    async with transaction(db=db):
+        container = await db.async_get("container")
+        ob = await container.async_get("foobar")
+        annotations = IAnnotations(ob)
         assert "foobar" in (await annotations.async_keys())
         await annotations.async_del("foobar")
 
