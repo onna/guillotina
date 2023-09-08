@@ -702,7 +702,12 @@ class Transaction:
         for _id in ids:
             cache_key = f"{base_obj.__uuid__}::{_id}"
             if cache_key in self._annotation_cache and self._annotation_cache[cache_key] != _EMPTY:
-                cached[_id] = self._annotation_cache[cache_key]
+                value = self._annotation_cache[cache_key]
+                if reader is None:
+                    obj = await app_settings["object_reader"](value)
+                else:
+                    obj = await reader(value)
+                cached[_id] = obj
             else:
                 to_fetch.append(_id)
         if not to_fetch:
