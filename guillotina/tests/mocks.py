@@ -72,6 +72,9 @@ class MockTransaction:  # type: ignore
     async def get_annotations(self, ob, ids, reader=None):  # pragma: no cover
         pass
 
+    def clear_annotation_cache(*_, **__):  # pragma: no cover
+        pass
+
     def __enter__(self):
         task_vars.txn.set(self)
         return self
