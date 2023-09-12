@@ -1,4 +1,5 @@
 from collections import OrderedDict
+from lru import LRU
 from guillotina import task_vars
 from guillotina._settings import app_settings
 from guillotina.component import query_adapter
@@ -211,6 +212,8 @@ class Transaction:
 
         self._cache = cache or query_adapter(self, ITransactionCache, name=app_settings["cache"]["strategy"])
         self._query_count_start = self._query_count_end = 0
+
+        self._annotation_cache = LRU(100)
 
     def get_query_count(self):
         """
@@ -565,6 +568,7 @@ class Transaction:
         self.modified = {}
         self.deleted = {}
         self._db_txn = None
+        self._annotation_cache = LRU(100)
 
     # Inspection
 
@@ -673,8 +677,16 @@ class Transaction:
 
     @profilable
     async def get_annotation(self, base_obj, id, reader=None):
-        result = await self._get_annotation(base_obj, id)
+        cache_key = f"{base_obj.__uuid__}::{id}"
+        result = None
+        if cache_key in self._annotation_cache:
+            result = self._annotation_cache[cache_key]
+        if result and result != _EMPTY:
+            return result
+        if not result:
+            result = await self._get_annotation(base_obj, id)
         if result == _EMPTY:
+            self._annotation_cache[cache_key] = _EMPTY
             raise KeyError(id)
         if reader is None:
             obj = await app_settings["object_reader"](result)
@@ -682,14 +694,26 @@ class Transaction:
             obj = await reader(result)
         obj.__of__ = base_obj.__uuid__
         obj.__txn__ = self
+        self._annotation_cache[cache_key] = obj
         return obj
 
     @profilable
     async def get_annotations(self, base_obj, ids, reader=None):
-        # Fetch all annotations in one query.
-        raw_data = await self._manager._storage.get_annotations(self, base_obj.__uuid__, ids)
+        cached = {}
+        to_fetch = []
+        for _id in ids:
+            cache_key = f"{base_obj.__uuid__}::{_id}"
+            if cache_key in self._annotation_cache and self._annotation_cache[cache_key] != _EMPTY:
+                cached[_id] = self._annotation_cache[cache_key]
+            else:
+                to_fetch.append(_id)
+        if not to_fetch:
+            return cached
+
+        # One query fetch all remaining annotations.
+        raw_data = await self._manager._storage.get_annotations(self, base_obj.__uuid__, to_fetch)
         if not raw_data:
-            return {}
+            return cached
 
         # Read the state data.
         if not reader:
@@ -700,7 +724,13 @@ class Transaction:
         for data in state_data:
             data.__of__ = base_obj.__uuid__
             data.__txn__ = self
-        return {keys[idx]: state_data[idx] for idx in range(len(keys))}
+        return {**cached, **{keys[idx]: state_data[idx] for idx in range(len(keys))}}
+
+    def clear_annotation_cache(self, base_obj, _id):
+        try:
+            del self._annotation_cache[f"{base_obj.__uuid__}::{_id}"]
+        except KeyError:
+            ...
 
     @profilable
     @cache(lambda oid: {"oid": oid, "variant": "annotation-keys"})

@@ -1,10 +1,10 @@
 CHANGELOG
 =========
 
-5.4.18 (2023-09-09)
+5.4.18 (2023-09-12)
 -------------------
 
-- Disable annotation cache entirely (buggy)
+- More work on fixing annotation bugs.
 
 5.4.17 (2023-09-08)
 -------------------
