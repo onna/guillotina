@@ -1,7 +1,9 @@
+from typing import List
 from guillotina import configure
 from guillotina import content
 from guillotina import error_reasons
 from guillotina import security
+from dataclasses import dataclass
 from guillotina._cache import FACTORY_CACHE
 from guillotina._settings import app_settings
 from guillotina.api.service import Service
@@ -137,6 +139,61 @@ class DefaultGET(Service):
         await notify(ObjectVisitedEvent(self.context))
         return result
 
+@dataclass
+class PostConfig:
+    context: IResource
+    data: dict
+    _id: str
+    user: str
+    _type: str
+
+async def post(config: PostConfig) -> IResource:
+    behaviors = config.data.get("@behaviors", None)
+
+    id_checker = get_adapter(config.context, IIDChecker)
+    if not isinstance(config._id, str) or not await id_checker(config._id, config._type):
+        raise ErrorResponse(
+            "PreconditionFailed",
+            "Invalid id: {}".format(config._id),
+            status=412,
+            reason=error_reasons.INVALID_ID,
+        )
+
+    options = {"creators": (config.user,), "contributors": (config.user,)}
+    if "uid" in config.data:
+        options["__uuid__"] = config.data.pop("uid")
+
+    # Create object
+    try:
+        obj = await create_content_in_container(config.context, config._type, config._id, **options)
+    except ValueError as e:
+        return ErrorResponse("CreatingObject", str(e), status=412)
+
+    for behavior in behaviors or ():
+        obj.add_behavior(behavior)
+
+    # Update fields
+    deserializer = query_multi_adapter((obj, None), IResourceDeserializeFromJson)
+    if deserializer is None:
+        return ErrorResponse(
+            "DeserializationError",
+            "Cannot deserialize type {}".format(obj.type_name),
+            status=412,
+            reason=error_reasons.DESERIALIZATION_FAILED,
+        )
+    await deserializer(config.data, validate_all=True, create=True)
+
+    # Local Roles assign owner as the creator user
+    get_owner = get_utility(IGetOwner)
+    roleperm = IPrincipalRoleManager(obj)
+    owner = await get_owner(obj, config.user)
+    if owner is not None:
+        roleperm.assign_role_to_principal("guillotina.Owner", owner)
+
+    config.data["id"] = obj.id
+    await notify(ObjectAddedEvent(obj, config.context, obj.id, payload=config.data))
+
+    return obj
 
 @configure.service(
     context=IResource,
@@ -159,9 +216,8 @@ class DefaultPOST(Service):
     async def __call__(self):
         """To create a content."""
         data = await self.get_data()
-        type_ = data.get("@type", None)
         id_ = data.get("id", None)
-        behaviors = data.get("@behaviors", None)
+        type_ = data.get("@type", None)
 
         if not type_:
             raise ErrorResponse(
@@ -171,72 +227,52 @@ class DefaultPOST(Service):
                 status=412,
             )
 
-        id_checker = get_adapter(self.context, IIDChecker)
         # Generate a temporary id if the id is not given
         new_id = None
         if not id_:
             generator = query_adapter(self.request, IIDGenerator)
             if generator is not None:
                 new_id = generator(data)
-                if isinstance(new_id, str) and not await id_checker(new_id, type_):
-                    raise ErrorResponse(
-                        "PreconditionFailed",
-                        "Invalid id: {}".format(new_id),
-                        status=412,
-                        reason=error_reasons.INVALID_ID,
-                    )
-        else:
-            if not isinstance(id_, str) or not await id_checker(id_, type_):
-                raise ErrorResponse(
-                    "PreconditionFailed",
-                    "Invalid id: {}".format(id_),
-                    status=412,
-                    reason=error_reasons.INVALID_ID,
-                )
+        else:  
             new_id = id_
-
+        
         user = get_authenticated_user_id()
 
-        options = {"creators": (user,), "contributors": (user,)}
-        if "uid" in data:
-            options["__uuid__"] = data.pop("uid")
-
-        # Create object
-        try:
-            obj = await create_content_in_container(self.context, type_, new_id, **options)
-        except ValueError as e:
-            return ErrorResponse("CreatingObject", str(e), status=412)
-
-        for behavior in behaviors or ():
-            obj.add_behavior(behavior)
-
-        # Update fields
-        deserializer = query_multi_adapter((obj, self.request), IResourceDeserializeFromJson)
-        if deserializer is None:
-            return ErrorResponse(
-                "DeserializationError",
-                "Cannot deserialize type {}".format(obj.type_name),
-                status=412,
-                reason=error_reasons.DESERIALIZATION_FAILED,
-            )
-
-        await deserializer(data, validate_all=True, create=True)
-
-        # Local Roles assign owner as the creator user
-        get_owner = get_utility(IGetOwner)
-        roleperm = IPrincipalRoleManager(obj)
-        owner = await get_owner(obj, user)
-        if owner is not None:
-            roleperm.assign_role_to_principal("guillotina.Owner", owner)
-
-        data["id"] = obj.id
-        await notify(ObjectAddedEvent(obj, self.context, obj.id, payload=data))
+        config = PostConfig(context=self.context, data=data, _id=new_id, user=user, _type=type_)
+        obj = await post(config=config)
 
         headers = {"Access-Control-Expose-Headers": "Location", "Location": get_object_url(obj, self.request)}
-
         serializer = query_multi_adapter((obj, self.request), IResourceSerializeToJsonSummary)
         response = await serializer()
         return Response(content=response, status=201, headers=headers)
+
+
+@dataclass
+class PatchConfig:
+    context: IResource
+    data: dict
+
+async def patch(config: PatchConfig) -> IResource:
+    behaviors = config.data.get("@behaviors", None)
+    for behavior in behaviors or ():
+        try:
+            config.context.add_behavior(behavior)
+        except (TypeError, ComponentLookupError):
+            return HTTPPreconditionFailed(
+                content={"message": f"{behavior} is not a valid behavior", "behavior": behavior}
+            )
+    await notify(BeforeObjectModifiedEvent(config.context, payload=config.data))
+    deserializer = query_multi_adapter((config.context, None), IResourceDeserializeFromJson)
+    if deserializer is None:
+        raise ErrorResponse(
+                "DeserializationError",
+                "Cannot deserialize type {}".format(config.context.type_name),
+                status=412,
+                reason=error_reasons.DESERIALIZATION_FAILED,
+            )
+    await deserializer(config.data)
+    await notify(ObjectModifiedEvent(config.context, payload=config.data))
+    return config.context
 
 
 @configure.service(
@@ -255,31 +291,10 @@ class DefaultPOST(Service):
 class DefaultPATCH(Service):
     async def __call__(self):
         data = await self.get_data()
-
-        behaviors = data.get("@behaviors", None)
-        for behavior in behaviors or ():
-            try:
-                self.context.add_behavior(behavior)
-            except (TypeError, ComponentLookupError):
-                return HTTPPreconditionFailed(
-                    content={"message": f"{behavior} is not a valid behavior", "behavior": behavior}
-                )
-
-        deserializer = query_multi_adapter((self.context, self.request), IResourceDeserializeFromJson)
-        if deserializer is None:
-            raise ErrorResponse(
-                "DeserializationError",
-                "Cannot deserialize type {}".format(self.context.type_name),
-                status=412,
-                reason=error_reasons.DESERIALIZATION_FAILED,
-            )
-
-        await notify(BeforeObjectModifiedEvent(self.context, payload=data))
-
-        await deserializer(data)
-
-        await notify(ObjectModifiedEvent(self.context, payload=data))
-
+    
+        config = PatchConfig(context=self.context, data=data)
+        context = await patch(config)
+    
         return Response(status=204)
 
 

@@ -1,8 +1,7 @@
 Cython==0.29.6
-aiohttp>=3.0.0,<3.6.0;python_version<"3.8"
-aiohttp>=3.6.0,<4.0.0;python_version>="3.8"
-asyncpg==0.20.0
-cffi==1.12.2
+aiohttp==3.7.4
+asyncpg==0.21.0
+cffi==1.15.1
 chardet==3.0.4
 jsonschema==2.6.0
 multidict==4.5.2
@@ -15,7 +14,7 @@ six==1.11.0
 ujson==1.35
 yarl==1.2.6
 zope.interface==5.1.0
-argon2-cffi==18.3.0
+argon2-cffi==19.2.0
 backoff==1.10.0
 prometheus-client==0.8.0
 brotli==1.0.9
