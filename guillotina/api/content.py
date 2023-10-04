@@ -224,9 +224,9 @@ class DefaultPOST(Service):
             generator = query_adapter(self.request, IIDGenerator)
             if generator is not None:
                 new_id = generator(data)
-        else:  
+        else:
             new_id = id_
-        
+
         user = get_authenticated_user_id()
 
         obj = await post(context=self.context, data=data, _id=new_id, user=user, type_=type_)
@@ -250,11 +250,11 @@ async def patch(context: IResource, data: dict) -> IResource:
     deserializer = query_multi_adapter((context, None), IResourceDeserializeFromJson)
     if deserializer is None:
         raise ErrorResponse(
-                "DeserializationError",
-                "Cannot deserialize type {}".format(context.type_name),
-                status=412,
-                reason=error_reasons.DESERIALIZATION_FAILED,
-            )
+            "DeserializationError",
+            "Cannot deserialize type {}".format(context.type_name),
+            status=412,
+            reason=error_reasons.DESERIALIZATION_FAILED,
+        )
     await deserializer(data)
     await notify(ObjectModifiedEvent(context, payload=data))
     return context
@@ -276,7 +276,7 @@ async def patch(context: IResource, data: dict) -> IResource:
 class DefaultPATCH(Service):
     async def __call__(self):
         data = await self.get_data()
-        context = await patch(context=self.context, data=data)
+        _ = await patch(context=self.context, data=data)
         return Response(status=204)
 
 
