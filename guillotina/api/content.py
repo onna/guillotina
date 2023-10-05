@@ -158,7 +158,7 @@ async def post(context: IResource, data: dict, _id: str, user: str, type_: str) 
     try:
         obj = await create_content_in_container(context, type_, _id, **options)
     except ValueError as e:
-        return ErrorResponse("CreatingObject", str(e), status=412)
+        raise ErrorResponse("CreatingObject", str(e), status=412)
 
     for behavior in behaviors or ():
         obj.add_behavior(behavior)
@@ -166,7 +166,7 @@ async def post(context: IResource, data: dict, _id: str, user: str, type_: str) 
     # Update fields
     deserializer = query_multi_adapter((obj, None), IResourceDeserializeFromJson)
     if deserializer is None:
-        return ErrorResponse(
+        raise ErrorResponse(
             "DeserializationError",
             "Cannot deserialize type {}".format(obj.type_name),
             status=412,
@@ -185,6 +185,7 @@ async def post(context: IResource, data: dict, _id: str, user: str, type_: str) 
     await notify(ObjectAddedEvent(obj, context, obj.id, payload=data))
 
     return obj
+
 
 @configure.service(
     context=IResource,
@@ -243,7 +244,7 @@ async def patch(context: IResource, data: dict) -> IResource:
         try:
             context.add_behavior(behavior)
         except (TypeError, ComponentLookupError):
-            return HTTPPreconditionFailed(
+            raise HTTPPreconditionFailed(
                 content={"message": f"{behavior} is not a valid behavior", "behavior": behavior}
             )
     await notify(BeforeObjectModifiedEvent(context, payload=data))
