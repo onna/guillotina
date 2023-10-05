@@ -233,8 +233,7 @@ class IStorage(Interface):
         """
         load the current tid for an object from oid
         """
-
-    async def store(oid, old_serial, writer, obj, txn):
+    async def store(oid, old_serial, writer, serialized, obj, txn):
         """
         store oid with obj
         """
