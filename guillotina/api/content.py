@@ -39,6 +39,7 @@ from guillotina.interfaces import IIDGenerator
 from guillotina.interfaces import IPrincipalPermissionMap
 from guillotina.interfaces import IPrincipalRoleManager
 from guillotina.interfaces import IPrincipalRoleMap
+from guillotina.interfaces import IRequest
 from guillotina.interfaces import IResource
 from guillotina.interfaces import IResourceDeserializeFromJson
 from guillotina.interfaces import IResourceSerializeToJson
@@ -138,7 +139,9 @@ class DefaultGET(Service):
         return result
 
 
-async def post(context: IResource, data: dict, _id: str, user: str, type_: str) -> IResource:
+async def post(
+    context: IResource, data: dict, _id: str, user: str, type_: str, request: IRequest = None
+) -> IResource:
     behaviors = data.get("@behaviors", None)
     options = {"creators": (user,), "contributors": (user,)}
     if "uid" in data:
@@ -154,7 +157,7 @@ async def post(context: IResource, data: dict, _id: str, user: str, type_: str) 
         obj.add_behavior(behavior)
 
     # Update fields
-    deserializer = query_multi_adapter((obj, None), IResourceDeserializeFromJson)
+    deserializer = query_multi_adapter((obj, request), IResourceDeserializeFromJson)
     if deserializer is None:
         raise ErrorResponse(
             "DeserializationError",
@@ -234,7 +237,9 @@ class DefaultPOST(Service):
             new_id = id_
         user = get_authenticated_user_id()
 
-        obj = await post(context=self.context, data=data, _id=new_id, user=user, type_=type_)
+        obj = await post(
+            context=self.context, data=data, _id=new_id, user=user, type_=type_, request=self.request
+        )
 
         headers = {"Access-Control-Expose-Headers": "Location", "Location": get_object_url(obj, self.request)}
         serializer = query_multi_adapter((obj, self.request), IResourceSerializeToJsonSummary)
@@ -242,7 +247,7 @@ class DefaultPOST(Service):
         return Response(content=response, status=201, headers=headers)
 
 
-async def patch(context: IResource, data: dict) -> IResource:
+async def patch(context: IResource, data: dict, request: IRequest = None) -> IResource:
     behaviors = data.get("@behaviors", None)
     for behavior in behaviors or ():
         try:
@@ -252,7 +257,7 @@ async def patch(context: IResource, data: dict) -> IResource:
                 content={"message": f"{behavior} is not a valid behavior", "behavior": behavior}
             )
     await notify(BeforeObjectModifiedEvent(context, payload=data))
-    deserializer = query_multi_adapter((context, None), IResourceDeserializeFromJson)
+    deserializer = query_multi_adapter((context, request), IResourceDeserializeFromJson)
     if deserializer is None:
         raise ErrorResponse(
             "DeserializationError",
@@ -281,7 +286,7 @@ async def patch(context: IResource, data: dict) -> IResource:
 class DefaultPATCH(Service):
     async def __call__(self):
         data = await self.get_data()
-        _ = await patch(context=self.context, data=data)
+        _ = await patch(context=self.context, data=data, request=self.request)
         return Response(status=204)
 
 
