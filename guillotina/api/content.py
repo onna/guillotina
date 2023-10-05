@@ -140,13 +140,6 @@ class DefaultGET(Service):
 
 async def post(context: IResource, data: dict, _id: str, user: str, type_: str) -> IResource:
     behaviors = data.get("@behaviors", None)
-
-    id_checker = get_adapter(context, IIDChecker)
-    if not isinstance(_id, str) or not await id_checker(_id, type_):
-        raise ErrorResponse(
-            "PreconditionFailed", "Invalid id: {}".format(_id), status=412, reason=error_reasons.INVALID_ID,
-        )
-
     options = {"creators": (user,), "contributors": (user,)}
     if "uid" in data:
         options["__uuid__"] = data.pop("uid")
@@ -218,13 +211,27 @@ class DefaultPOST(Service):
 
         # Generate a temporary id if the id is not given
         new_id = None
+        id_checker = get_adapter(self.context, IIDChecker)
         if not id_:
             generator = query_adapter(self.request, IIDGenerator)
             if generator is not None:
                 new_id = generator(data)
+                if isinstance(new_id, str) and not await id_checker(new_id, type_):
+                    raise ErrorResponse(
+                        "PreconditionFailed",
+                        "Invalid id: {}".format(new_id),
+                        status=412,
+                        reason=error_reasons.INVALID_ID,
+                    )
         else:
+            if not isinstance(id_, str) or not await id_checker(id_, type_):
+                raise ErrorResponse(
+                    "PreconditionFailed",
+                    "Invalid id: {}".format(id_),
+                    status=412,
+                    reason=error_reasons.INVALID_ID,
+                )
             new_id = id_
-
         user = get_authenticated_user_id()
 
         obj = await post(context=self.context, data=data, _id=new_id, user=user, type_=type_)
