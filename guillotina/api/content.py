@@ -144,10 +144,7 @@ async def post(context: IResource, data: dict, _id: str, user: str, type_: str) 
     id_checker = get_adapter(context, IIDChecker)
     if not isinstance(_id, str) or not await id_checker(_id, type_):
         raise ErrorResponse(
-            "PreconditionFailed",
-            "Invalid id: {}".format(_id),
-            status=412,
-            reason=error_reasons.INVALID_ID,
+            "PreconditionFailed", "Invalid id: {}".format(_id), status=412, reason=error_reasons.INVALID_ID,
         )
 
     options = {"creators": (user,), "contributors": (user,)}
