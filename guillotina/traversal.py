@@ -312,6 +312,7 @@ class MatchInfo(BaseMatchInfo):
                 request._view_error = True
         else:
             try:
+                breakpoint()
                 view_result = await self.view()
             except (response.Response, aiohttp.web_exceptions.HTTPException) as exc:
                 view_result = exc

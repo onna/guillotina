@@ -4,7 +4,7 @@ from guillotina.component import get_utility
 from guillotina.db.interfaces import IDatabaseManager
 from guillotina.db.storages.dummy import DummyFileStorage
 from guillotina.db.storages.dummy import DummyStorage
-from guillotina.db.storages.pg import PostgresqlStorage
+from guillotina.db.storages.postgres import PostgresqlStorage
 from guillotina.db.transaction_manager import TransactionManager
 from guillotina.event import notify
 from guillotina.events import DatabaseInitializedEvent

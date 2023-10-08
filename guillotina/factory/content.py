@@ -173,6 +173,7 @@ class Database:
 
         try:
             await txn.initialize_tid()
+            breakpoint()
             root = await tm._storage.load(txn, ROOT_ID)
             if root is not None:
                 root = await app_settings["object_reader"](root)
@@ -185,6 +186,7 @@ class Database:
             from guillotina.db.db import Root
 
             root = Root(self.__db_id__)
+            root.__new_marker = True
             writer = IWriter(root)
             await tm._storage.store(ROOT_ID, 0, writer, await writer.serialize(), root, txn)
         finally:
