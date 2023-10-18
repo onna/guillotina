@@ -1,5 +1,6 @@
 # Git Ignore this patterns:
 *.py[co]
+.python-version
 
 # Packages
 *.egg-info
@@ -70,3 +71,5 @@ cov_html
 !/src/*
 dummy_file.db
 dummy_file.db.blobs
+.vscode/
+config-local*.yaml

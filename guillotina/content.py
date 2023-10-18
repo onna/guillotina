@@ -651,13 +651,15 @@ async def get_all_behaviors(content, create=False, load=True, preload_only=False
             data_keys[inst.__annotations_data_key__] = inst
     if data_keys:
         txn = get_transaction()
+        if txn is None:
+            raise Exception("No transaction available")
         annotation_data = await txn.get_annotations(content, list(data_keys))
         for inst in instances:
             key = getattr(inst, "__annotations_data_key__", None)
             if key and key in annotation_data:
                 content.__gannotations__[key] = annotation_data[key]
     if preload_only:
-        return
+        return []
 
     # Load all (for all non-preload items, this takes care of initialization).
     behaviors = []

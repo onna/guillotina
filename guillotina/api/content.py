@@ -39,6 +39,7 @@ from guillotina.interfaces import IIDGenerator
 from guillotina.interfaces import IPrincipalPermissionMap
 from guillotina.interfaces import IPrincipalRoleManager
 from guillotina.interfaces import IPrincipalRoleMap
+from guillotina.interfaces import IRequest
 from guillotina.interfaces import IResource
 from guillotina.interfaces import IResourceDeserializeFromJson
 from guillotina.interfaces import IResourceSerializeToJson
@@ -138,6 +139,47 @@ class DefaultGET(Service):
         return result
 
 
+async def post(
+    context: IResource, data: dict, _id: str, user: str, type_: str, request: IRequest = None
+) -> IResource:
+    behaviors = data.get("@behaviors", None)
+    options = {"creators": (user,), "contributors": (user,)}
+    if "uid" in data:
+        options["__uuid__"] = data.pop("uid")
+
+    # Create object
+    try:
+        obj = await create_content_in_container(context, type_, _id, **options)
+    except ValueError as e:
+        raise ErrorResponse("CreatingObject", str(e), status=412)
+
+    for behavior in behaviors or ():
+        obj.add_behavior(behavior)
+
+    # Update fields
+    deserializer = query_multi_adapter((obj, request), IResourceDeserializeFromJson)
+    if deserializer is None:
+        raise ErrorResponse(
+            "DeserializationError",
+            "Cannot deserialize type {}".format(obj.type_name),
+            status=412,
+            reason=error_reasons.DESERIALIZATION_FAILED,
+        )
+    await deserializer(data, validate_all=True, create=True)
+
+    # Local Roles assign owner as the creator user
+    get_owner = get_utility(IGetOwner)
+    roleperm = IPrincipalRoleManager(obj)
+    owner = await get_owner(obj, user)
+    if owner is not None:
+        roleperm.assign_role_to_principal("guillotina.Owner", owner)
+
+    data["id"] = obj.id
+    await notify(ObjectAddedEvent(obj, context, obj.id, payload=data))
+
+    return obj
+
+
 @configure.service(
     context=IResource,
     method="POST",
@@ -159,9 +201,8 @@ class DefaultPOST(Service):
     async def __call__(self):
         """To create a content."""
         data = await self.get_data()
-        type_ = data.get("@type", None)
         id_ = data.get("id", None)
-        behaviors = data.get("@behaviors", None)
+        type_ = data.get("@type", None)
 
         if not type_:
             raise ErrorResponse(
@@ -171,9 +212,9 @@ class DefaultPOST(Service):
                 status=412,
             )
 
-        id_checker = get_adapter(self.context, IIDChecker)
         # Generate a temporary id if the id is not given
         new_id = None
+        id_checker = get_adapter(self.context, IIDChecker)
         if not id_:
             generator = query_adapter(self.request, IIDGenerator)
             if generator is not None:
@@ -194,49 +235,39 @@ class DefaultPOST(Service):
                     reason=error_reasons.INVALID_ID,
                 )
             new_id = id_
-
         user = get_authenticated_user_id()
 
-        options = {"creators": (user,), "contributors": (user,)}
-        if "uid" in data:
-            options["__uuid__"] = data.pop("uid")
-
-        # Create object
-        try:
-            obj = await create_content_in_container(self.context, type_, new_id, **options)
-        except ValueError as e:
-            return ErrorResponse("CreatingObject", str(e), status=412)
-
-        for behavior in behaviors or ():
-            obj.add_behavior(behavior)
-
-        # Update fields
-        deserializer = query_multi_adapter((obj, self.request), IResourceDeserializeFromJson)
-        if deserializer is None:
-            return ErrorResponse(
-                "DeserializationError",
-                "Cannot deserialize type {}".format(obj.type_name),
-                status=412,
-                reason=error_reasons.DESERIALIZATION_FAILED,
-            )
-
-        await deserializer(data, validate_all=True, create=True)
-
-        # Local Roles assign owner as the creator user
-        get_owner = get_utility(IGetOwner)
-        roleperm = IPrincipalRoleManager(obj)
-        owner = await get_owner(obj, user)
-        if owner is not None:
-            roleperm.assign_role_to_principal("guillotina.Owner", owner)
-
-        data["id"] = obj.id
-        await notify(ObjectAddedEvent(obj, self.context, obj.id, payload=data))
+        obj = await post(
+            context=self.context, data=data, _id=new_id, user=user, type_=type_, request=self.request
+        )
 
         headers = {"Access-Control-Expose-Headers": "Location", "Location": get_object_url(obj, self.request)}
-
         serializer = query_multi_adapter((obj, self.request), IResourceSerializeToJsonSummary)
         response = await serializer()
         return Response(content=response, status=201, headers=headers)
+
+
+async def patch(context: IResource, data: dict, request: IRequest = None) -> IResource:
+    behaviors = data.get("@behaviors", None)
+    for behavior in behaviors or ():
+        try:
+            context.add_behavior(behavior)
+        except (TypeError, ComponentLookupError):
+            raise HTTPPreconditionFailed(
+                content={"message": f"{behavior} is not a valid behavior", "behavior": behavior}
+            )
+    await notify(BeforeObjectModifiedEvent(context, payload=data))
+    deserializer = query_multi_adapter((context, request), IResourceDeserializeFromJson)
+    if deserializer is None:
+        raise ErrorResponse(
+            "DeserializationError",
+            "Cannot deserialize type {}".format(context.type_name),
+            status=412,
+            reason=error_reasons.DESERIALIZATION_FAILED,
+        )
+    await deserializer(data)
+    await notify(ObjectModifiedEvent(context, payload=data))
+    return context
 
 
 @configure.service(
@@ -255,31 +286,7 @@ class DefaultPOST(Service):
 class DefaultPATCH(Service):
     async def __call__(self):
         data = await self.get_data()
-
-        behaviors = data.get("@behaviors", None)
-        for behavior in behaviors or ():
-            try:
-                self.context.add_behavior(behavior)
-            except (TypeError, ComponentLookupError):
-                return HTTPPreconditionFailed(
-                    content={"message": f"{behavior} is not a valid behavior", "behavior": behavior}
-                )
-
-        deserializer = query_multi_adapter((self.context, self.request), IResourceDeserializeFromJson)
-        if deserializer is None:
-            raise ErrorResponse(
-                "DeserializationError",
-                "Cannot deserialize type {}".format(self.context.type_name),
-                status=412,
-                reason=error_reasons.DESERIALIZATION_FAILED,
-            )
-
-        await notify(BeforeObjectModifiedEvent(self.context, payload=data))
-
-        await deserializer(data)
-
-        await notify(ObjectModifiedEvent(self.context, payload=data))
-
+        _ = await patch(context=self.context, data=data, request=self.request)
         return Response(status=204)
 
 

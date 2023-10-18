@@ -37,6 +37,11 @@ class ITransaction(Interface):
         Add hook to be called after transaction commit
         """
 
+    async def get_annotations(base_obj, ids, reader=None):
+        """
+        Get annotations for object
+        """
+
     async def add_after_commit_failure_hook(hook, *real_args, args=None, kws=None, **kwargs):
         """
         Add hook to be called after a failure to perform transaction commit
@@ -229,7 +234,7 @@ class IStorage(Interface):
         load the current tid for an object from oid
         """
 
-    async def store(oid, old_serial, writer, obj, txn):
+    async def store(oid, old_serial, writer, serialized, obj, txn):
         """
         store oid with obj
         """

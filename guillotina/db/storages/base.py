@@ -49,7 +49,7 @@ class BaseStorage:
     async def get_one_row(self, smt, *args):
         raise NotImplemented()  # pragma: no cover
 
-    async def start_transaction(self, txn, retries=0):
+    async def start_transaction(self, txn):
         raise NotImplemented()  # pragma: no cover
 
     async def get_conflicts(self, txn):
@@ -86,6 +86,12 @@ class BaseStorage:
         raise NotImplemented()  # pragma: no cover
 
     async def get_annotation_keys(self, txn, oid):
+        raise NotImplemented()  # pragma: no cover
+
+    async def terminate(self, conn):
+        raise NotImplemented()  # pragma: no cover
+
+    async def remove(self):
         raise NotImplemented()  # pragma: no cover
 
     async def write_blob_chunk(self, txn, bid, oid, chunk_index, data):
