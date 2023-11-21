@@ -265,8 +265,12 @@ class TransactionObjectRegistrationMismatchException(Exception):
 
 
 class StateOffloadReadException(Exception):
-    ...
+    def __init__(self, *args, state_path=None):
+        self.state_path = state_path
+        super().__init__(*args)
 
 
 class StateOffloadWriteException(Exception):
-    ...
+    def __init__(self, *args, state_path=None):
+        self.state_path = state_path
+        super().__init__(*args)

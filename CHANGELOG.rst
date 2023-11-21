@@ -1,6 +1,11 @@
 CHANGELOG
 =========
 
+5.4.19 (2023-11-21)
+-------------------
+
+- Add `state_path` to state offload related exceptions
+
 5.4.18 (2023-09-12)
 -------------------
 
