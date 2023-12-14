@@ -649,6 +649,9 @@ class TransactionConnectionContextManager:
         else:
             await self.txn.get_connection()
         return self.txn._db_conn
+        
+    async def __aexit__(self, exc_type, exc, tb):
+        pass
 
 
 @implementer(IPostgresStorage)
