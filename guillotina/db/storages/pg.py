@@ -642,17 +642,13 @@ class TransactionConnectionContextManager:
     def __init__(self, storage, txn):
         self.storage = storage
         self.txn = txn
-        self.conn = None
 
     async def __aenter__(self):
         if self.txn._db_conn:
             return self.txn._db_conn
-        self.conn = await self.storage.pool.acquire(timeout=self.storage._conn_acquire_timeout)
-        return self.conn
-
-    async def __aexit__(self, *exc):
-        if self.conn is not None:
-            await self.storage.pool.release(self.conn)
+        else:
+            await self.txn.get_connection()
+        return self.txn._db_conn
 
 
 @implementer(IPostgresStorage)
@@ -1022,7 +1018,6 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
                         "Incorrect response count from database update. "
                         "This should not happen. tid: {}".format(txn._tid)
                     )
-        await txn._cache.store_object(obj, cache_value)
 
     async def _txn_oid_commit_hook(self, status, oid):
         if self._connection_manager._vacuum is not None:
