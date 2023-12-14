@@ -1085,6 +1085,9 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
     async def start_transaction(self, txn, retries=0):
         error = None
         conn = await txn.get_connection()
+        if txn._db_txn is not None:
+            return
+        
         async with watch_lock(txn._lock, "start_txn"):
             txn._db_txn = await self._async_db_transaction_factory(txn)
 
