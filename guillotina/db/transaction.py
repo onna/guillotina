@@ -121,21 +121,21 @@ class cache:
             # For cacheable requests containing an oid as part of the
             # key parameters, double check that the TID in cache
             # matches the TID in the database.
-            if result is not None and oid is not None and result.get("type") not in TID_VERIFY_SKIP:
-                expected_tid = None
-                try:
-                    expected_tid = await self._manager._storage.get_obj_tid(self, oid)
-                except KeyError:
-                    logger.error(f"Couldn't find TID for object with zoid: {oid}")
-                    record_cache_metric(func.__name__, "tid_check_miss", _EMPTY, key_args)
-                    result = None
+            # if result is not None and oid is not None and result.get("type") not in TID_VERIFY_SKIP:
+            #     expected_tid = None
+            #     try:
+            #         expected_tid = await self._manager._storage.get_obj_tid(self, oid)
+            #     except KeyError:
+            #         logger.error(f"Couldn't find TID for object with zoid: {oid}")
+            #         record_cache_metric(func.__name__, "tid_check_miss", _EMPTY, key_args)
+            #         result = None
 
-                if expected_tid:
-                    tid = result["tid"]
-                    if tid != expected_tid:
-                        logger.warning(f"Cache TID mismatch: {expected_tid} vs {tid} for {oid}")
-                        record_cache_metric(func.__name__, "outdated_tid", result, key_args)
-                        result = None
+            #     if expected_tid:
+            #         tid = result["tid"]
+            #         if tid != expected_tid:
+            #             logger.warning(f"Cache TID mismatch: {expected_tid} vs {tid} for {oid}")
+            #             record_cache_metric(func.__name__, "outdated_tid", result, key_args)
+            #             result = None
 
             if result is not None:
                 record_cache_metric(func.__name__, "hit", result, key_args)
