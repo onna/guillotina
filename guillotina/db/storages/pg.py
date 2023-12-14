@@ -648,6 +648,7 @@ class TransactionConnectionContextManager:
             return self.txn._db_conn
         else:
             await self.txn.get_connection()
+            # Guillotina txn is tied to a pg txn
             await self.storage.start_transaction(self.txn)
 
         return self.txn._db_conn
