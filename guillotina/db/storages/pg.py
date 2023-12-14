@@ -648,6 +648,8 @@ class TransactionConnectionContextManager:
             return self.txn._db_conn
         else:
             await self.txn.get_connection()
+            await self.storage.start_transaction(self.txn)
+
         return self.txn._db_conn
         
     async def __aexit__(self, exc_type, exc, tb):
