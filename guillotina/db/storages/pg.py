@@ -648,14 +648,12 @@ class TransactionConnectionContextManager:
         self.txn = txn
 
     async def __aenter__(self):
-        async with watch_lock(self.txn._lock, "get_connection_and_txn"):
-            if self.txn._db_conn:
-                return self.txn._db_conn
-            else:
-                await self.txn.get_connection()
-                # Guillotina txn is tied to a pg txn
-                await self.storage.start_transaction(self.txn)
-
+        if self.txn._db_conn:
+            return self.txn._db_conn
+        else:
+            # Guillotina txn is tied to a pg txn
+            # Refactor this since its pure side effects...
+            await self.storage.start_transaction(self.txn)
             return self.txn._db_conn
         
     async def __aexit__(self, exc_type, exc, tb):
