@@ -648,14 +648,15 @@ class TransactionConnectionContextManager:
         self.txn = txn
 
     async def __aenter__(self):
-        if self.txn._db_conn:
-            return self.txn._db_conn
-        else:
-            await self.txn.get_connection()
-            # Guillotina txn is tied to a pg txn
-            await self.storage.start_transaction(self.txn)
+        async with watch_lock(self.txn._lock, "get_connection_and_txn"):
+            if self.txn._db_conn:
+                return self.txn._db_conn
+            else:
+                await self.txn.get_connection()
+                # Guillotina txn is tied to a pg txn
+                await self.storage.start_transaction(self.txn)
 
-        return self.txn._db_conn
+            return self.txn._db_conn
         
     async def __aexit__(self, exc_type, exc, tb):
         pass
@@ -971,7 +972,7 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
             update = True
 
         conn = await txn.get_connection()
-        async with watch_lock(txn._lock, "store_object"):
+        async with watch_nonlock("store_object"):
             try:
                 with watch("store_object"):
                     result = await conn.fetch(
