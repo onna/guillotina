@@ -101,3 +101,28 @@ class watch_lock:
             return
 
         self.lock.release()
+
+
+class watch_nonlock:
+    def __init__(
+        self,
+        histogram: Optional[Histogram] = None,
+        labels: Optional[Dict[str, str]] = None,
+    ):
+        self.histogram = histogram
+        self.labels = labels or {}
+
+    async def __aenter__(self) -> None:
+        if self.histogram is None:
+            return
+
+        start = time.time()
+        finished = time.time()
+        if len(self.labels) > 0:
+            self.histogram.labels(**self.labels).observe(finished - start)
+        else:
+            self.histogram.observe(finished - start)
+
+    async def __aexit__(self, exc_type, exc, tb):
+        if self.histogram is None:
+            return
