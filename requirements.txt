@@ -18,3 +18,8 @@ argon2-cffi==19.2.0
 backoff==1.10.0
 prometheus-client==0.8.0
 brotli==1.0.9
+
+opentelemetry-distro[otlp]==0.29b0
+opentelemetry-instrumentation==0.29b0
+opentelemetry-util-http==0.29b0
+protobuf==3.20.2

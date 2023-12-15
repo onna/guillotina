@@ -26,6 +26,7 @@ import asyncpg
 import asyncpg.connection
 import concurrent
 import time
+import opentelemetry
 import ujson
 
 
@@ -103,6 +104,7 @@ except ImportError:
 
 
 log = glogging.getLogger("guillotina.storage")
+tracer = opentelemetry.trace.get_tracer(__name__)
 
 
 # we can not use FOR UPDATE or FOR SHARE unfortunately because
@@ -449,7 +451,7 @@ class PGVacuum:
             except (concurrent.futures.CancelledError, RuntimeError):
                 # we're okay with the task getting cancelled
                 return
-
+            
     async def _initialize(self):
         while not self._closed:
             oid = None
@@ -556,6 +558,7 @@ class PGConnectionManager:
     def lock(self):
         return self._lock
 
+    @tracer.start_as_current_span("close")
     async def close(self):
         async with watch_lock(self._lock, "shared_close_conn"):
             if self._pool is None:
@@ -591,6 +594,7 @@ class PGConnectionManager:
                     await conn.execute(f"CREATE SCHEMA IF NOT EXISTS {self._db_schema}")
             await self._initialize_tid_statements(True)
 
+    @tracer.start_as_current_span("initialize")
     async def initialize(self, loop=None, **kw):
         async with watch_lock(self._lock, "shared_initialize"):
             if self._pool is not None:
@@ -647,6 +651,7 @@ class TransactionConnectionContextManager:
         self.storage = storage
         self.txn = txn
 
+    @tracer.start_as_current_span("tm.__aenter__")
     async def __aenter__(self):
         if self.txn._db_conn:
             return self.txn._db_conn
@@ -655,7 +660,8 @@ class TransactionConnectionContextManager:
             # Refactor this since its pure side effects...
             await self.storage.start_transaction(self.txn)
             return self.txn._db_conn
-        
+    
+    @tracer.start_as_current_span("tm.__aexit__")   
     async def __aexit__(self, exc_type, exc, tb):
         pass
 
@@ -835,6 +841,7 @@ class PostgresqlStorage(BaseStorage):
         self._connection_initialized_on = time.time()
         raise ConflictError("Restarting connection to postgresql")
 
+    @tracer.start_as_current_span("has_unique_constraint")   
     async def has_unique_constraint(self, conn):
         table_name = clear_table_name(self._objects_table_name)
         result = await conn.fetch(
@@ -930,6 +937,7 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
         log.warning(f"Terminate connection {conn}", exc_info=True)
         conn.terminate()
 
+    @tracer.start_as_current_span("load")   
     async def load(self, txn, oid):
         sql = self._sql.get("GET_OID", self._objects_table_name)
         objects = await self.get_one_row(txn, sql, oid, metric="load_object_by_oid")
@@ -939,6 +947,7 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
         objects["state"] = await app_settings["state_reader"](objects)
         return objects
 
+    @tracer.start_as_current_span("get_obj_tid")   
     async def get_obj_tid(self, txn, oid):
         sql = self._sql.get("GET_TID", self._objects_table_name)
         result = await self.get_one_row(txn, sql, oid, metric="load_tid_by_oid")
@@ -946,7 +955,7 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
             raise KeyError(oid)
         return result["tid"]
 
-    @profilable
+    @tracer.start_as_current_span("store")   
     async def store(self, oid, old_serial, writer, serialized, obj, txn):
         assert oid is not None
         pickled, cache_value = serialized
@@ -1035,6 +1044,7 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
     def acquire(self, txn):
         return TransactionConnectionContextManager(self, txn)
 
+    @tracer.start_as_current_span("delete")
     async def delete(self, txn, oid):
         obj = await get_object_by_uid(oid)
         writer = query_adapter(obj, IWriter)
@@ -1058,17 +1068,20 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
                         return await self.restart_connection()
 
     @restart_conn_on_exception
+    @tracer.start_as_current_span("get_next_tid")
     async def get_next_tid(self, txn):
         async with self.acquire(txn) as conn:
             with watch("next_tid"):
                 return await conn.fetchval(self._next_tid_sql.format(schema=self._db_schema))
 
     @restart_conn_on_exception
+    @tracer.start_as_current_span("get_current_tid")
     async def get_current_tid(self, txn):
         async with self.acquire(txn) as conn:
             with watch("current_tid"):
                 return await conn.fetchval(self._max_tid_sql.format(schema=self._db_schema))
 
+    @tracer.start_as_current_span("get_one_row")
     async def get_one_row(self, txn, sql, *args, prepare=False, metric="get_one_row"):
         # Helper function to provide easy adaptation to cockroach
         async with self.acquire(txn) as conn:
@@ -1085,6 +1098,7 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
     async def _async_db_transaction_factory(self, txn):
         return self._db_transaction_factory(txn)
 
+    @tracer.start_as_current_span("start_txn")
     async def start_transaction(self, txn, retries=0):
         error = None
         conn = await txn.get_connection()
@@ -1127,6 +1141,7 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
                 txn._db_conn = await self.open()
                 return await self.start_transaction(txn, retries + 1)
 
+    @tracer.start_as_current_span("get_conflicts")
     async def get_conflicts(self, txn):
         if len(txn.modified) == 0:
             return []
