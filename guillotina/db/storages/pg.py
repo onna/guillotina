@@ -971,7 +971,7 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
             update = True
 
         conn = await txn.get_connection()
-        async with watch_nonlock("store_object"):
+        async with watch_lock(txn._lock, "store_object"):
             try:
                 with watch("store_object"):
                     result = await conn.fetch(
@@ -1092,7 +1092,7 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
         if txn._db_txn is not None:
             return
         
-        async with watch_nonlock("start_txn"):
+        async with watch_lock(txn._lock, "start_txn"):
             txn._db_txn = await self._async_db_transaction_factory(txn)
 
             try:
@@ -1146,7 +1146,7 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
                     return await conn.fetch(sql, txn._tid)
 
     async def commit(self, transaction):
-        async with watch_nonlock("commit_txn"):
+        async with watch_lock(transaction._lock, "commit_txn"):
             if transaction._db_txn is not None:
                 with watch("commit_txn"):
                     await transaction._db_txn.commit()
@@ -1155,7 +1155,7 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
             return transaction._tid
 
     async def abort(self, transaction):
-        async with watch_nonlock("rollback_txn"):
+        async with watch_lock(transaction._lock, "rollback_txn"):
             if transaction._db_txn is not None:
                 try:
                     with watch("rollback_txn"):
