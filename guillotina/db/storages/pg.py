@@ -1159,6 +1159,7 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
                 async with self.pool.acquire() as conn:
                     return await conn.fetch(sql, txn._tid)
 
+    @tracer.start_as_current_span("commit")
     async def commit(self, transaction):
         async with watch_lock(transaction._lock, "commit_txn"):
             if transaction._db_txn is not None:
@@ -1168,6 +1169,7 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
                 log.warning("Do not have db transaction to commit")
             return transaction._tid
 
+    @tracer.start_as_current_span("abort")
     async def abort(self, transaction):
         async with watch_lock(transaction._lock, "rollback_txn"):
             if transaction._db_txn is not None:
@@ -1182,6 +1184,7 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
         #     log.warning('Do not have db transaction to rollback')
 
     # Introspection
+    @tracer.start_as_current_span("get_page_of_keys")
     async def get_page_of_keys(self, txn, oid, page=1, page_size=1000):
         keys = []
         sql = self._sql.get("BATCHED_GET_CHILDREN_KEYS", self._objects_table_name)
@@ -1191,6 +1194,7 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
                     keys.append(record["id"])
         return keys
 
+    @tracer.start_as_current_span("keys")
     async def keys(self, txn, oid):
         sql = self._sql.get("GET_CHILDREN_KEYS", self._objects_table_name)
         async with self.acquire(txn) as conn:
@@ -1198,6 +1202,7 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
                 result = await conn.fetch(sql, oid)
         return result
 
+    @tracer.start_as_current_span("get_child")
     async def get_child(self, txn, parent_oid, id):
         sql = self._sql.get("GET_CHILD", self._objects_table_name)
         result = await self.get_one_row(txn, sql, parent_oid, id, metric="get_child")
@@ -1206,6 +1211,7 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
             result["state"] = await app_settings["state_reader"](result)
         return result
 
+    @tracer.start_as_current_span("get_children")
     async def get_children(self, txn, parent_oid, ids):
         sql = self._sql.get("GET_CHILDREN_BATCH", self._objects_table_name)
         async with self.acquire(txn) as conn:
@@ -1217,6 +1223,7 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
                         row["state"] = await app_settings["state_reader"](row)
                 return result
 
+    @tracer.start_as_current_span("has_key")
     async def has_key(self, txn, parent_oid, id):
         sql = self._sql.get("EXIST_CHILD", self._objects_table_name)
         result = await self.get_one_row(txn, sql, parent_oid, id, metric="has_key")
@@ -1225,6 +1232,7 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
         else:
             return True
 
+    @tracer.start_as_current_span("len")
     async def len(self, txn, oid):
         sql = self._sql.get("NUM_CHILDREN", self._objects_table_name)
         async with self.acquire(txn) as conn:
@@ -1232,6 +1240,7 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
                 result = await conn.fetchval(sql, oid)
         return result
 
+    @tracer.start_as_current_span("items")
     async def items(self, txn, oid):
         sql = self._sql.get("GET_CHILDREN", self._objects_table_name)
         async with self.acquire(txn) as conn:
@@ -1251,6 +1260,7 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
                     if len(records) < max_records:
                         break
 
+    @tracer.start_as_current_span("get_annotation")
     async def get_annotation(self, txn, oid, id):
         sql = self._sql.get("GET_ANNOTATION", self._objects_table_name)
         result = await self.get_one_row(txn, sql, oid, id, metric="load_annotation")
@@ -1261,6 +1271,7 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
             result["state"] = await app_settings["state_reader"](result)
         return result
 
+    @tracer.start_as_current_span("get_annotations")
     async def get_annotations(self, txn, oid, ids):
         sql = self._sql.get("GET_ANNOTATIONS", self._objects_table_name)
         futures = []
@@ -1277,6 +1288,7 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
             annotations[idx]["state"] = state_data[idx]
         return {annotation["id"]: annotation for annotation in annotations}
 
+    @tracer.start_as_current_span("get_annotation_keys")
     async def get_annotation_keys(self, txn, oid):
         sql = self._sql.get("GET_ANNOTATIONS_KEYS", self._objects_table_name)
         async with self.acquire(txn) as conn:
@@ -1288,6 +1300,7 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
                 items.append(item)
         return items
 
+    @tracer.start_as_current_span("write_blob_chunk")
     async def write_blob_chunk(self, txn, bid, oid, chunk_index, data):
         sql = self._sql.get("HAS_OBJECT", self._objects_table_name)
         result = await self.get_one_row(txn, sql, oid, metric="has_object")
@@ -1307,10 +1320,12 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
             with watch("store_blob_chunk"):
                 return await conn.execute(sql, bid, oid, chunk_index, data)
 
+    @tracer.start_as_current_span("read_blob_chunk")
     async def read_blob_chunk(self, txn, bid, chunk=0):
         sql = self._sql.get("READ_BLOB_CHUNK", self._blobs_table_name)
         return await self.get_one_row(txn, sql, bid, chunk, metric="load_blob_chunk")
 
+    @tracer.start_as_current_span("read_blob_chunks")
     async def read_blob_chunks(self, txn, bid):
         async with self.acquire(txn) as conn:
             with watch("read_blob_chunks"):
@@ -1320,12 +1335,14 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
                     # sub-queries and they you end up with a deadlock
                     yield record
 
+    @tracer.start_as_current_span("del_blob")
     async def del_blob(self, txn, bid):
         sql = self._sql.get("DELETE_BLOB", self._blobs_table_name)
         async with self.acquire(txn) as conn:
             with watch("delete_blob_chunk"):
                 await conn.execute(sql, bid)
 
+    @tracer.start_as_current_span("get_total_number_of_objects")
     async def get_total_number_of_objects(self, txn):
         sql = self._sql.get("NUM_ROWS", self._objects_table_name)
         async with self.acquire(txn) as conn:
@@ -1333,6 +1350,7 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
                 result = await conn.fetchval(sql)
         return result
 
+    @tracer.start_as_current_span("get_total_number_of_resources")
     async def get_total_number_of_resources(self, txn):
         sql = self._sql.get("NUM_RESOURCES", self._objects_table_name)
         async with self.acquire(txn) as conn:
@@ -1340,6 +1358,7 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
                 result = await conn.fetchval(sql)
         return result
 
+    @tracer.start_as_current_span("get_total_resources_of_type")
     async def get_total_resources_of_type(self, txn, type_):
         sql = self._sql.get("NUM_RESOURCES_BY_TYPE", self._objects_table_name)
         async with self.acquire(txn) as conn:
@@ -1348,6 +1367,7 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
         return result
 
     # Massive treatment without security
+    @tracer.start_as_current_span("_get_page_resources_of_type")
     async def _get_page_resources_of_type(self, txn, type_, page, page_size):
         async with self.acquire(txn) as conn:
             keys = []
