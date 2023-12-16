@@ -672,7 +672,7 @@ class TransactionConnectionContextManager:
         span = tracer.get_current_span()
         if self.txn._db_conn:
             span.add_event(
-                "using existing connection"
+                "using existing connection",
                 attributes={
                     "txn.id": self.txn._tid,
 
@@ -683,7 +683,7 @@ class TransactionConnectionContextManager:
             # Refactor this since its pure side effects...
             await self.storage.start_transaction(self.txn)
             span.add_event(
-                "start a new connection"
+                "start a new connection",
                 attributes={
                     "txn.id": self.txn._tid,
                 }
