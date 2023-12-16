@@ -80,6 +80,7 @@ from zope.interface import Interface
 from zope.interface import noLongerProvides
 from zope.interface.interfaces import ComponentLookupError
 
+import asyncio
 from functools import wraps
 import guillotina.db.orm.base
 import os
@@ -97,7 +98,10 @@ def trace(func):
     async def inner(*args, **kwargs):
         fname = f"{func.__module__}.{func.__name__}"
         with tracer.start_as_current_span(fname) as span:
-            return await func(*args, **kwargs)
+            if asyncio.iscoroutinefunction(func):
+                return await func(*args, **kwargs)
+            else:
+                return func(*args, **kwargs)
     return inner
 
 

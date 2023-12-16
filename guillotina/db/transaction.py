@@ -48,7 +48,10 @@ def trace(func):
     async def inner(*args, **kwargs):
         fname = f"{func.__module__}.{func.__name__}"
         with tracer.start_as_current_span(fname) as span:
-            return await func(*args, **kwargs)
+            if asyncio.iscoroutinefunction(func):
+                return await func(*args, **kwargs)
+            else:
+                return func(*args, **kwargs)
     return inner
 
 
@@ -201,7 +204,6 @@ class Transaction:
         # which would correspond with one connection
         self._lock = asyncio.Lock(loop=loop)
 
-    @trace
     def initialize(self, read_only, cache=None, strategy=None):
         self._read_only = read_only
         self._txn_time = None
@@ -355,7 +357,6 @@ class Transaction:
         return False
 
     @profilable
-    @trace
     def register(self, obj: IBaseObject, new_oid: Optional[str] = None):
         """We are adding a new object on the DB"""
         if self.read_only:
@@ -385,7 +386,6 @@ class Transaction:
         elif oid not in self.added:
             self.modified[oid] = obj
     
-    @trace
     def delete(self, obj: IBaseObject):
         if self.read_only:
             raise ReadOnlyError()
@@ -591,7 +591,6 @@ class Transaction:
         await self._cache.close()
         self.tpc_cleanup()
 
-    @trace
     def tpc_cleanup(self):
         self.added = {}
         self.version_history = {zoid: obj.__serial__ for zoid, obj in self.modified.items()}

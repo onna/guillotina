@@ -119,8 +119,11 @@ def trace(func):
             for i, arg in enumerate(args):
                 span.set_attribute(f"arg_{i}", str(arg))
             for k, v in kwargs.items():
-                span.set_attribute(k, str(v))    
-            return await func(*args, **kwargs)
+                span.set_attribute(k, str(v))   
+            if asyncio.iscoroutinefunction(func): 
+                return await func(*args, **kwargs)
+            else:
+                return func(*args, **kwargs)
     return inner
 
 
