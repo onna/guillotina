@@ -80,7 +80,7 @@ from zope.interface import Interface
 from zope.interface import noLongerProvides
 from zope.interface.interfaces import ComponentLookupError
 
-import contextlib
+from functools import wraps
 import guillotina.db.orm.base
 import os
 import opentelemetry
@@ -92,10 +92,13 @@ _marker = object()
 tracer = opentelemetry.trace.get_tracer(__name__)
 
 
-@contextlib.asynccontextmanager
-async def trace(tracer, *args, **kwargs):
-    with tracer.start_as_current_span(*args, **kwargs) as span:
-        yield span
+def trace(func):
+    @wraps(func)
+    async def inner(*args, **kwargs):
+        fname = f"{func.__module__}.{func.__name__}"
+        with tracer.start_as_current_span(fname) as span:
+            return await func(*args, **kwargs)
+    return inner
 
 
 @implementer(IResourceFactory)
@@ -304,7 +307,7 @@ class Folder(Resource):
             return self.__txn__
         raise TransactionNotFound()
 
-    @trace(tracer, "Folder.async_contains")
+    @trace
     async def async_contains(self, key: str) -> bool:
         """
         Asynchronously check if key exists inside this folder
@@ -313,7 +316,7 @@ class Folder(Resource):
         """
         return await self._get_transaction().contains(self.__uuid__, key)
 
-    @trace(tracer, "Folder.async_set")
+    @trace
     async def async_set(self, key: str, value: Resource) -> None:
         """
         Asynchronously set an object in this folder
@@ -328,7 +331,7 @@ class Folder(Resource):
             value.__txn__ = trns
             trns.register(value)
 
-    @trace(tracer, "Folder.async_get")
+    @trace
     async def async_get(self, key: str, default=None, suppress_events=False) -> Optional[IBaseObject]:
         """
         Asynchronously get an object inside this folder
@@ -346,7 +349,7 @@ class Folder(Resource):
             pass
         return default
 
-    @trace(tracer, "Folder.async_multi_get")
+    @trace
     async def async_multi_get(
         self, keys: List[str], default=None, suppress_events=False
     ) -> AsyncIterator[IBaseObject]:
@@ -359,7 +362,7 @@ class Folder(Resource):
         async for item in txn.get_children(self, keys):  # type: ignore
             yield item
 
-    @trace(tracer, "Folder.async_del")
+    @trace
     async def async_del(self, key: str) -> None:
         """
         Asynchronously delete object in the folder
@@ -371,21 +374,21 @@ class Folder(Resource):
         if obj is not None:
             return txn.delete(obj)
 
-    @trace(tracer, "Folder.async_len")
+    @trace
     async def async_len(self) -> int:
         """
         Asynchronously calculate the len of the folder
         """
         return await self._get_transaction().len(self.__uuid__)
 
-    @trace(tracer, "Folder.async_keys")
+    @trace
     async def async_keys(self) -> List[str]:
         """
         Asynchronously get the sub object keys in this folder
         """
         return await self._get_transaction().keys(self.__uuid__)
 
-    @trace(tracer, "Folder.async_items")
+    @trace
     async def async_items(self, suppress_events=False) -> AsyncIterator[Tuple[str, Resource]]:
         """
         Asynchronously iterate through contents of folder
@@ -396,7 +399,7 @@ class Folder(Resource):
                 await notify(ObjectLoadedEvent(value))
             yield key, value
 
-    @trace(tracer, "Folder.async_values")
+    @trace
     async def async_values(self, suppress_events=False) -> AsyncIterator[Tuple[Resource]]:
         txn = self._get_transaction()
         async for _, value in txn.items(self):  # type: ignore
@@ -570,7 +573,7 @@ def iter_schemata(obj) -> Iterator[Interface]:
 
 
 @profilable
-@trace(tracer, "create_content")
+@trace
 async def create_content(type_, **kw) -> IResource:
     """Utility to create a content.
 
@@ -588,7 +591,7 @@ async def create_content(type_, **kw) -> IResource:
 
 
 @profilable
-@trace(tracer, "create_content_in_container")
+@trace
 async def create_content_in_container(
     parent: Folder, type_: str, id_: str, request: IRequest = None, check_security=True, **kw
 ) -> Resource:
@@ -660,7 +663,7 @@ def get_all_behavior_interfaces(content) -> list:
     return behaviors
 
 
-@trace(tracer, "get_all_behaviors")
+@trace
 async def get_all_behaviors(content, create=False, load=True, preload_only=False) -> list:
     schemas = get_all_behavior_interfaces(content)
     instances = [schema(content) for schema in schemas]
