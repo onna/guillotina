@@ -28,16 +28,28 @@ from typing import Optional
 from typing import Union
 from typing_extensions import TypedDict
 from zope.interface import implementer
+from functools import wraps
 
 import asyncio
 import asyncpg
 import logging
 import sys
 import time
+import opentelemetry.trace
 
 
 _EMPTY = "__<EMPTY VALUE>__"
 TID_VERIFY_SKIP = {"Container", "guillotina.db.db.Root", "User"}
+tracer = opentelemetry.trace.get_tracer(__name__)
+
+
+def trace(func):
+    @wraps(func)
+    async def inner(*args, **kwargs):
+        fname = f"{func.__module__}.{func.__name__}"
+        with tracer.start_as_current_span(fname) as span:
+            return await func(*args, **kwargs)
+    return inner
 
 
 class ObjectResultType(TypedDict, total=False):
@@ -106,6 +118,7 @@ class cache:
     def __call__(self, func):
         this = self
 
+        @trace
         async def _wrapper(self, *args, **kwargs):
             key_args = this.key_gen(*args, **kwargs)
             oid = key_args.get("oid")
@@ -188,6 +201,7 @@ class Transaction:
         # which would correspond with one connection
         self._lock = asyncio.Lock(loop=loop)
 
+    @trace
     def initialize(self, read_only, cache=None, strategy=None):
         self._read_only = read_only
         self._txn_time = None
@@ -215,6 +229,7 @@ class Transaction:
 
         self._annotation_cache = LRU(100)
 
+    @trace
     def get_query_count(self):
         """
         diff versions of asyncpg
@@ -230,6 +245,7 @@ class Transaction:
                 pass
         return 0
 
+    @trace
     async def get_connection(self):
         if self._db_conn is None:
             self._db_conn = await self._manager._storage.open()
@@ -286,6 +302,7 @@ class Transaction:
         self._after_commit_failure.append((hook, real_args + tuple(args), kwargs))
 
     @profilable
+    @trace
     async def _call_after_commit_hooks(self, hooks, status=True):
         # Avoid to abort anything at the end if no hooks are registred.
         if not hooks:
@@ -317,6 +334,7 @@ class Transaction:
         return result
 
     # BEGIN TXN
+    @trace
     async def tpc_begin(self):
         """Begin commit of a transaction
 
@@ -337,6 +355,7 @@ class Transaction:
         return False
 
     @profilable
+    @trace
     def register(self, obj: IBaseObject, new_oid: Optional[str] = None):
         """We are adding a new object on the DB"""
         if self.read_only:
@@ -365,7 +384,8 @@ class Transaction:
                 raise TransactionObjectRegistrationMismatchException(self.modified[oid], obj)
         elif oid not in self.added:
             self.modified[oid] = obj
-
+    
+    @trace
     def delete(self, obj: IBaseObject):
         if self.read_only:
             raise ReadOnlyError()
@@ -377,10 +397,12 @@ class Transaction:
                 del self.added[oid]
             self.deleted[oid] = obj
 
+    @trace
     async def clean_cache(self):
         self._manager._hard_cache.clear()
         await self._cache.clear()
 
+    @trace
     async def refresh(self, ob):
         """
         refresh an object with the value from the database
@@ -402,6 +424,7 @@ class Transaction:
         return await self._manager._storage.load(self, oid)
 
     @profilable
+    @trace
     async def get(self, oid: str, ignore_registered: bool = False) -> IBaseObject:
         """Getting a oid from the db"""
         if not ignore_registered:
@@ -419,7 +442,8 @@ class Transaction:
             # ttl of zero means we want to provide a hard cache here
             self._manager._hard_cache[oid] = result
         return obj
-
+    
+    @trace
     async def commit(self) -> None:
         restarts = 0
         while True:
@@ -463,6 +487,7 @@ class Transaction:
         await self._call_after_commit_success_hooks()
 
     @profilable
+    @trace
     async def abort(self):
         self.status = Status.ABORTED
         await self._manager._storage.abort(self)
@@ -490,7 +515,8 @@ class Transaction:
             obj.__txn__ = self
         if update_not_new:
             obj.__new_marker__ = False
-
+    
+    @trace
     async def initialize_tid(self) -> None:
         if self._tid is not None:
             return self._tid
@@ -500,6 +526,7 @@ class Transaction:
                 self._tid = tid
 
     @profilable
+    @trace
     async def tpc_commit(self):
         """Commit changes to an object"""
 
@@ -538,6 +565,7 @@ class Transaction:
             )
 
     @profilable
+    @trace
     async def tpc_vote(self):
         """Verify that a data manager can commit the transaction."""
         # potential conflict error, get changes
@@ -555,6 +583,7 @@ class Transaction:
                 raise ConflictError(self)
 
     @profilable
+    @trace
     async def tpc_finish(self):
         """Indicate confirmation that the transaction is done."""
         if not self.read_only:
@@ -562,6 +591,7 @@ class Transaction:
         await self._cache.close()
         self.tpc_cleanup()
 
+    @trace
     def tpc_cleanup(self):
         self.added = {}
         self.version_history = {zoid: obj.__serial__ for zoid, obj in self.modified.items()}
@@ -589,6 +619,7 @@ class Transaction:
         return await self._manager._storage.get_child(self, container.__uuid__, key)
 
     @profilable
+    @trace
     async def get_child(self, parent, key):
         result = await self._get_child(parent, key)
         if result is None:

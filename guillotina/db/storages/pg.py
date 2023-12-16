@@ -1,4 +1,6 @@
 from asyncio import shield
+
+from attr import attributes
 from guillotina import glogging
 from guillotina import metrics
 from guillotina._settings import app_settings
@@ -21,6 +23,7 @@ from guillotina.profile import profilable
 from guillotina.utils.content import get_object_by_uid
 from zope.interface import implementer
 from functools import wraps
+from typing import cast
 
 import asyncio
 import asyncpg
@@ -113,6 +116,10 @@ def trace(func):
     async def inner(*args, **kwargs):
         fname = f"{func.__module__}.{func.__name__}"
         with tracer.start_as_current_span(fname) as span:
+            for i, arg in enumerate(args):
+                span.set_attribute(f"arg_{i}", str(arg))
+            for k, v in kwargs.items():
+                span.set_attribute(k, str(v))    
             return await func(*args, **kwargs)
     return inner
 
@@ -661,19 +668,37 @@ class TransactionConnectionContextManager:
         self.storage = storage
         self.txn = txn
 
-    @trace
     async def __aenter__(self):
+        span = tracer.get_current_span()
         if self.txn._db_conn:
-            return self.txn._db_conn
+            span.add_event(
+                "using existing connection"
+                attributes={
+                    "txn.id": self.txn._tid,
+
+                }
+            )
         else:
             # Guillotina txn is tied to a pg txn
             # Refactor this since its pure side effects...
             await self.storage.start_transaction(self.txn)
-            return self.txn._db_conn
+            span.add_event(
+                "start a new connection"
+                attributes={
+                    "txn.id": self.txn._tid,
+                }
+            )
+        return self.txn._db_conn
     
-    @trace
     async def __aexit__(self, exc_type, exc, tb):
-        pass
+        span = tracer.get_current_span()
+        span.add_event(
+            "closing connection",
+            attributes={
+                "txn.id": self.txn._tid,
+
+            },
+        )
 
 
 @implementer(IPostgresStorage)
@@ -804,7 +829,6 @@ class PostgresqlStorage(BaseStorage):
             await self._create(conn)
 
     async def _create(self, conn):
-
         # Check DB
         log.info("Creating initial database objects")
 
