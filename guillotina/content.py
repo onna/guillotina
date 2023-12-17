@@ -84,7 +84,7 @@ import asyncio
 from functools import wraps
 import guillotina.db.orm.base
 import os
-import opentelemetry
+import opentelemetry.trace
 import pathlib
 
 
