@@ -121,18 +121,31 @@ class cache:
     def __call__(self, func):
         this = self
 
-        @trace
         async def _wrapper(self, *args, **kwargs):
             key_args = this.key_gen(*args, **kwargs)
             oid = key_args.get("oid")
 
-            result = await self._cache.get(**key_args)
-            if not isinstance(result, dict) and not isinstance(result, asyncpg.Record):
-                result = None
-            elif oid is None:
-                oid = result["zoid"]
-            if result and "type" not in result:
-                result = None
+            with tracer.start_as_current_span("cache.get") as span:
+                result = await self._cache.get(**key_args)
+
+                if not isinstance(result, dict) and not isinstance(result, asyncpg.Record):
+                    result = None
+                    span.add_event("cache_miss", attributes={
+                        "oid": oid,
+                        "reason": "not_dict_or_record",
+                    })
+                elif oid is None:
+                    oid = result["zoid"]
+                    span.add_event("cache_miss", attributes={
+                        "oid": oid,
+                        "reason": "oid is None",
+                    })
+                if result and "type" not in result:
+                    result = None
+                    span.add_event("cache_miss", attributes={
+                        "oid": oid,
+                        "reason": "type missing",
+                    })
 
             # For cacheable requests containing an oid as part of the
             # key parameters, double check that the TID in cache
@@ -155,26 +168,36 @@ class cache:
 
             if result is not None:
                 record_cache_metric(func.__name__, "hit", result, key_args)
+                span.add_event("cache_hit", attributes={
+                        "oid": oid,
+                })  
                 return result
 
+            span.add_event("cache_miss", attributes={
+                        "oid": oid,
+            }) 
             result = await func(self, *args, **kwargs)
 
             record_cache_metric(func.__name__, "miss", result, key_args)
             if result is not None:
                 if result == _EMPTY:
-                    await self._cache.set(result, keyset=[key_args])
+                    with tracer.start_as_current_span("cache.set") as span:
+                        span.set_attribute("cache.empty", True)
+                        await self._cache.set(result, keyset=[key_args])
                 else:
                     try:
                         if (
                             not this.check_state_size
                             or len(result["state"]) < self._cache.max_cache_record_size
                         ):
-                            await self._cache.set(
-                                result,
-                                keyset=[key_args] + [key_gen(result) for key_gen in this.additional_keys],
-                            )
+                            with tracer.start_as_current_span("cache.set") as span:
+                                await self._cache.set(
+                                    result,
+                                    keyset=[key_args] + [key_gen(result) for key_gen in this.additional_keys],
+                                )
                     except (TypeError, KeyError):
-                        await self._cache.set(result, **key_args)
+                        with tracer.start_as_current_span("cache.set") as span:
+                            await self._cache.set(result, **key_args)
                 return result
 
         return _wrapper
