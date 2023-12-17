@@ -30,7 +30,7 @@ import asyncpg
 import asyncpg.connection
 import concurrent
 import time
-import opentelemetry
+import opentelemetry.trace
 import ujson
 
 
@@ -672,7 +672,7 @@ class TransactionConnectionContextManager:
         self.txn = txn
 
     async def __aenter__(self):
-        span = tracer.get_current_span()
+        span = opentelemetry.trace.get_current_span()
         if self.txn._db_conn:
             span.add_event(
                 "using existing connection",
@@ -694,7 +694,7 @@ class TransactionConnectionContextManager:
         return self.txn._db_conn
     
     async def __aexit__(self, exc_type, exc, tb):
-        span = tracer.get_current_span()
+        span = opentelemetry.trace.get_current_span()
         span.add_event(
             "closing connection",
             attributes={
