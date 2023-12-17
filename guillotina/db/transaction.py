@@ -256,7 +256,6 @@ class Transaction:
 
         self._annotation_cache = LRU(100)
 
-    @trace
     def get_query_count(self):
         """
         diff versions of asyncpg
