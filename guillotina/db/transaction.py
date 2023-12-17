@@ -132,7 +132,7 @@ class cache:
                     result = None
                     span.add_event("cache_miss", attributes={
                         "oid": oid,
-                        "type": type(result),
+                        "type": str(type(result)),
                         "reason": "not_dict_or_record",
                     })
                 elif oid is None:
@@ -145,6 +145,7 @@ class cache:
                     result = None
                     span.add_event("cache_miss", attributes={
                         "oid": oid,
+                        "keys": result.keys(),
                         "reason": "type missing",
                     })
 
