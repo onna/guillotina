@@ -344,7 +344,9 @@ class Transaction:
             try:
                 result = lazy_apply(hook, status, *args, **kws)
                 if asyncio.iscoroutine(result):
-                    await result
+                    with tracer.start_as_current_span("after_commit_hook") as span:
+                        span.set_attribute("hook", hook.__name__)
+                        await result
             except Exception:
                 # We need to catch the exceptions if we want all hooks
                 # to be called
