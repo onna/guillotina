@@ -1,6 +1,11 @@
 CHANGELOG
 =========
 
+5.4.19 (2023-12-19)
+-------------------
+
+- Fix transaction context manager doesn't abort the txn when a exception is raised
+
 5.4.18 (2023-09-12)
 -------------------
 
