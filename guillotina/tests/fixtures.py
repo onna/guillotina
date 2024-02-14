@@ -8,6 +8,7 @@ from guillotina.component import globalregistry
 from guillotina.const import ROOT_ID
 from guillotina.const import TRASHED_ID
 from guillotina.content import load_cached_schema
+from guillotina.contrib.pubsub.exceptions import NoPubSubDriver
 from guillotina.db.interfaces import IPostgresStorage
 from guillotina.factory import make_app
 from guillotina.interfaces import IApplication
@@ -409,7 +410,10 @@ def guillotina(db, guillotina_main, loop):
     loop.run_until_complete(server.start_server(loop=loop))
     requester = GuillotinaDBRequester(server=server, loop=loop)
     yield requester
-    loop.run_until_complete(server.close())
+    try:
+        loop.run_until_complete(server.close())
+    except NoPubSubDriver:
+        pass
 
 
 @pytest.fixture(scope="function")
