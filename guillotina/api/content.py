@@ -65,6 +65,9 @@ from guillotina.utils import get_security_policy
 from guillotina.utils import iter_parents
 from guillotina.utils import resolve_dotted_name
 
+from typing import Any
+from typing import Dict
+
 
 def get_content_json_schema_responses(content):
     return {
@@ -206,7 +209,7 @@ class DefaultPOST(Service):
     @profilable
     async def __call__(self, check_security: bool = True):
         """To create a content."""
-        data = await self.get_data()
+        data: Dict[Any, Any] = await self.get_data()
         id_ = data.get("id", None)
         type_ = data.get("@type", None)
 
