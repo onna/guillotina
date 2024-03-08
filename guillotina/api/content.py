@@ -223,7 +223,7 @@ class DefaultPOST(Service):
             )
 
         # Generate a temporary id if the id is not given
-        new_id = ""
+        new_id = None
         id_checker = get_adapter(self.context, IIDChecker)
         if not id_:
             generator = query_adapter(self.request, IIDGenerator)
@@ -247,15 +247,8 @@ class DefaultPOST(Service):
             new_id = id_
 
         user = get_authenticated_user_id()
-        if not user:
-            raise ErrorResponse(
-                "Unauthorized",
-                "Cannot add content without a valid user",
-                status=401,
-                reason=error_reasons.UNAUTHORIZED,
-            )
 
-        obj = await post(
+        obj = await post(  # type: ignore
             context=self.context,
             data=data,
             _id=new_id,
