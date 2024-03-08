@@ -140,7 +140,13 @@ class DefaultGET(Service):
 
 
 async def post(
-    context: IResource, data: dict, _id: str, user: str, type_: str, request: IRequest = None
+    context: IResource,
+    data: dict,
+    _id: str,
+    user: str,
+    type_: str,
+    request: IRequest = None,
+    check_security: bool = True,
 ) -> IResource:
     behaviors = data.get("@behaviors", None)
     options = {"creators": (user,), "contributors": (user,)}
@@ -149,7 +155,7 @@ async def post(
 
     # Create object
     try:
-        obj = await create_content_in_container(context, type_, _id, **options)
+        obj = await create_content_in_container(context, type_, _id, check_security=check_security, **options)
     except ValueError as e:
         raise ErrorResponse("CreatingObject", str(e), status=412)
 
@@ -198,11 +204,15 @@ async def post(
 )
 class DefaultPOST(Service):
     @profilable
-    async def __call__(self):
+    async def __call__(self, check_security: bool = True):
         """To create a content."""
         data = await self.get_data()
-        id_ = data.get("id", None)
-        type_ = data.get("@type", None)
+        if isinstance(data, dict):
+            id_ = data.get("id", None)
+            type_ = data.get("@type", None)
+        else:
+            id_ = None
+            type_ = None
 
         if not type_:
             raise ErrorResponse(
@@ -235,10 +245,17 @@ class DefaultPOST(Service):
                     reason=error_reasons.INVALID_ID,
                 )
             new_id = id_
+
         user = get_authenticated_user_id()
 
-        obj = await post(
-            context=self.context, data=data, _id=new_id, user=user, type_=type_, request=self.request
+        obj = await post(  # type: ignore
+            context=self.context,
+            data=data,
+            _id=new_id,
+            user=user,
+            type_=type_,
+            request=self.request,
+            check_security=check_security,
         )
 
         headers = {"Access-Control-Expose-Headers": "Location", "Location": get_object_url(obj, self.request)}
