@@ -209,9 +209,13 @@ class DefaultPOST(Service):
     @profilable
     async def __call__(self, check_security: bool = True):
         """To create a content."""
-        data: Dict[Any, Any] = await self.get_data()
-        id_ = data.get("id", None)
-        type_ = data.get("@type", None)
+        data = await self.get_data()
+        if isinstance(data, dict):
+            id_ = data.get("id", None)
+            type_ = data.get("@type", None)
+        else:
+            id_ = None
+            type_ = None
 
         if not type_:
             raise ErrorResponse(
