@@ -65,6 +65,8 @@ from guillotina.utils import get_security_policy
 from guillotina.utils import iter_parents
 from guillotina.utils import resolve_dotted_name
 
+from typing import Optional
+
 
 def get_content_json_schema_responses(content):
     return {
@@ -140,7 +142,13 @@ class DefaultGET(Service):
 
 
 async def post(
-    context: IResource, data: dict, _id: str, user: str, type_: str, request: IRequest = None
+    context: IResource,
+    data: dict,
+    _id: str,
+    user: str,
+    type_: str,
+    request: IRequest = None,
+    check_security: bool = True,
 ) -> IResource:
     behaviors = data.get("@behaviors", None)
     options = {"creators": (user,), "contributors": (user,)}
@@ -149,7 +157,7 @@ async def post(
 
     # Create object
     try:
-        obj = await create_content_in_container(context, type_, _id, **options)
+        obj = await create_content_in_container(context, type_, _id, check_security=check_security, **options)
     except ValueError as e:
         raise ErrorResponse("CreatingObject", str(e), status=412)
 
@@ -198,7 +206,7 @@ async def post(
 )
 class DefaultPOST(Service):
     @profilable
-    async def __call__(self):
+    async def __call__(self, check_security: Optional[bool] = True):
         """To create a content."""
         data = await self.get_data()
         id_ = data.get("id", None)
@@ -238,7 +246,13 @@ class DefaultPOST(Service):
         user = get_authenticated_user_id()
 
         obj = await post(
-            context=self.context, data=data, _id=new_id, user=user, type_=type_, request=self.request
+            context=self.context,
+            data=data,
+            _id=new_id,
+            user=user,
+            type_=type_,
+            request=self.request,
+            check_security=check_security,
         )
 
         headers = {"Access-Control-Expose-Headers": "Location", "Location": get_object_url(obj, self.request)}
