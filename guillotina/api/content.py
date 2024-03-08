@@ -65,9 +65,6 @@ from guillotina.utils import get_security_policy
 from guillotina.utils import iter_parents
 from guillotina.utils import resolve_dotted_name
 
-from typing import Any
-from typing import Dict
-
 
 def get_content_json_schema_responses(content):
     return {
