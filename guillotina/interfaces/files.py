@@ -1,7 +1,8 @@
+from datetime import datetime
 from guillotina import schema
 from guillotina.schema.interfaces import IObject
-from typing import AsyncIterator
-from zope.interface import Interface
+from typing import AsyncIterator, List, Optional, Tuple
+from zope.interface import Interface, Attribute
 
 
 class IUploadDataManager(Interface):
@@ -80,11 +81,42 @@ class IFileStorageManager(Interface):
         copy file to another file
         """
 
+class ICloudFile(Interface):
+
+    key: str = Attribute("""The key used to access the file""")
+    createdTime: datetime = Attribute("""The date the file was created""")
+    size: int = Attribute("""The size of the file in bytes""")
+    bucket: str = Attribute("""The bucket the file is located in""")
+
+    async def delete() -> bool:
+        """
+        Deletes the file from the storage location
+        """
+
+    async def exists() -> bool:
+        """
+        Checks if the file exists in the storage location
+        """
 
 class IExternalFileStorageManager(IFileStorageManager):
     """
     File manager that uses database to store upload state
     """
+
+    async def get_page_files(page_token: Optional[str] = None, prefix=None, max_keys=1000) -> Tuple[List[ICloudFile], str]:
+        """
+        Get a page of items from the bucket
+        """
+
+    async def get_file(key: str, bucket_name: Optional[str] = None) -> ICloudFile:
+        """
+        Get the blob from storage using the given key
+        """
+
+    async def delete_bucket(bucket_name: Optional[str] = None):
+        """
+        Delete the given bucket
+        """
 
 
 class IFileManager(Interface):

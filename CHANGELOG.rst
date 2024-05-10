@@ -1,6 +1,11 @@
 CHANGELOG
 =========
 
+5.5.0 (2024-05-10)
+-------------------
+
+- Adding interfaces to use for standardizing cloud vacuum support
+
 5.4.20 (2024-02-14)
 -------------------
 
