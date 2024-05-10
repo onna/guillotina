@@ -81,6 +81,7 @@ class IFileStorageManager(Interface):
         copy file to another file
         """
 
+
 class ICloudFile(Interface):
 
     key: str = Attribute("""The key used to access the file""")
@@ -98,12 +99,15 @@ class ICloudFile(Interface):
         Checks if the file exists in the storage location
         """
 
+
 class IExternalFileStorageManager(IFileStorageManager):
     """
     File manager that uses database to store upload state
     """
 
-    async def get_page_files(page_token: Optional[str] = None, prefix=None, max_keys=1000) -> Tuple[List[ICloudFile], str]:
+    async def get_page_files(
+        page_token: Optional[str] = None, prefix=None, max_keys=1000
+    ) -> Tuple[List[ICloudFile], str]:
         """
         Get a page of items from the bucket
         """
@@ -111,6 +115,11 @@ class IExternalFileStorageManager(IFileStorageManager):
     async def get_file(key: str, bucket_name: Optional[str] = None) -> ICloudFile:
         """
         Get the blob from storage using the given key
+        """
+
+    async def delete_files(keys: List[str], bucket_name: Optional[str] = None) -> Tuple[List[str], List[str]]:
+        """
+        Deletes a batch of files.  Returns successful and failed keys.
         """
 
     async def delete_bucket(bucket_name: Optional[str] = None):

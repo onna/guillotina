@@ -26,6 +26,6 @@ run-postgres: ## Run PostgreSQL
 .PHONY: run-redis
 run-redis: ## Run Redis
 	@echo ""
-	@echo "$(YELLOW)==> Running Redis"
+	@echo "$(YELLOW)==> Running Redis $(RESET)"
 	@docker run -p 127.0.0.1:32958:6379 --rm redis:5.0.7
 
