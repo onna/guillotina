@@ -82,22 +82,12 @@ class IFileStorageManager(Interface):
         """
 
 
-class ICloudFile(Interface):
+class ICloudBlob(Interface):
 
     key: str = Attribute("""The key used to access the file""")
     createdTime: datetime = Attribute("""The date the file was created""")
     size: int = Attribute("""The size of the file in bytes""")
     bucket: str = Attribute("""The bucket the file is located in""")
-
-    async def delete() -> bool:
-        """
-        Deletes the file from the storage location
-        """
-
-    async def exists() -> bool:
-        """
-        Checks if the file exists in the storage location
-        """
 
 
 class IExternalFileStorageManager(IFileStorageManager):
@@ -105,19 +95,14 @@ class IExternalFileStorageManager(IFileStorageManager):
     File manager that uses database to store upload state
     """
 
-    async def get_page_files(
+    async def get_blobs(
         page_token: Optional[str] = None, prefix=None, max_keys=1000
-    ) -> Tuple[List[ICloudFile], str]:
+    ) -> Tuple[List[ICloudBlob], str]:
         """
         Get a page of items from the bucket
         """
 
-    async def get_file(key: str, bucket_name: Optional[str] = None) -> ICloudFile:
-        """
-        Get the blob from storage using the given key
-        """
-
-    async def delete_files(keys: List[str], bucket_name: Optional[str] = None) -> Tuple[List[str], List[str]]:
+    async def delete_blobs(keys: List[str], bucket_name: Optional[str] = None) -> Tuple[List[str], List[str]]:
         """
         Deletes a batch of files.  Returns successful and failed keys.
         """
