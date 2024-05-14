@@ -82,13 +82,12 @@ class IFileStorageManager(Interface):
         """
 
 
-class ICloudBlob(Interface):
+class IBlobMetadata(Interface):
 
     name: str = Attribute("""The key used to access the file""")
     createdTime: datetime = Attribute("""The date the file was created""")
     size: int = Attribute("""The size of the file in bytes""")
     bucket: str = Attribute("""The bucket the file is located in""")
-
 
 class IExternalFileStorageManager(IFileStorageManager):
     """
@@ -97,9 +96,9 @@ class IExternalFileStorageManager(IFileStorageManager):
 
     async def get_blobs(
         page_token: Optional[str] = None, prefix=None, max_keys=1000
-    ) -> Tuple[List[ICloudBlob], str]:
+    ) -> Tuple[List[IBlobMetadata], str]:
         """
-        Get a page of items from the bucket
+        Get a page of files from the bucket
         """
 
     async def delete_blobs(keys: List[str], bucket_name: Optional[str] = None) -> Tuple[List[str], List[str]]:
