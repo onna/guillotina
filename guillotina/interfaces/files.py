@@ -84,7 +84,7 @@ class IFileStorageManager(Interface):
 
 class ICloudBlob(Interface):
 
-    key: str = Attribute("""The key used to access the file""")
+    name: str = Attribute("""The key used to access the file""")
     createdTime: datetime = Attribute("""The date the file was created""")
     size: int = Attribute("""The size of the file in bytes""")
     bucket: str = Attribute("""The bucket the file is located in""")
