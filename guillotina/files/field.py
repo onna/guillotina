@@ -1,4 +1,6 @@
+from datetime import datetime
 from functools import partial
+from typing import Optional
 from guillotina import configure
 from guillotina.component import get_multi_adapter
 from guillotina.files.utils import convert_base64_to_binary
@@ -7,6 +9,7 @@ from guillotina.interfaces import ICloudFileField
 from guillotina.interfaces import IContentBehavior
 from guillotina.interfaces import IFile
 from guillotina.interfaces import IFileManager
+from guillotina.interfaces.files import IBlobMetadata
 from guillotina.schema.fieldproperty import FieldProperty
 from guillotina.utils import get_current_request
 from guillotina.utils import to_str
@@ -164,3 +167,12 @@ async def deserialize_cloud_field(field, value, context):
         partial(_generator, value), content_type=content_type, size=len(value["data"]), filename=filename
     )
     return val
+
+@implementer(IBlobMetadata)
+class BlobMetadata:
+
+    def __init__(self, name: str, bucket: str, size: int, createdTime: Optional[datetime]):
+        self.name = name
+        self.bucket = bucket
+        self.size = size
+        self.createdTime = createdTime
