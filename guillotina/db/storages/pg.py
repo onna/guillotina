@@ -212,9 +212,6 @@ SELECT count(*) FROM rows""".format(
 
 # upsert without checking matching tids on updated object
 NAIVE_UPSERT = f"""
-SET lock_timeout = 5000;
-
-SELECT * FROM {{table_name}} WHERE zoid = $1::varchar({MAX_UID_LENGTH}) FOR UPDATE;
 INSERT INTO {{table_name}}
 (zoid, tid, state_size, part, resource, of, otid, parent_id, id, type, json, state)
 VALUES ($1::varchar({MAX_UID_LENGTH}), $2::bigint, $3::int, $4::int, $5::boolean,
@@ -971,6 +968,8 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
         async with watch_lock(txn._lock, "store_object"):
             try:
                 with watch("store_object"):
+                    await conn.execute("SET lock_timeout = 5000;")
+                    await conn.execute(f"SELECT * FROM {self._objects_table_name} WHERE zoid = $1::varchar({MAX_UID_LENGTH}) FOR UPDATE;", oid)
                     result = await conn.fetch(
                         statement_sql,
                         oid,  # The OID of the object
