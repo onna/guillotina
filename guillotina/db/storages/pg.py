@@ -969,7 +969,7 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
             try:
                 with watch("store_object"):
                     await conn.execute("SET lock_timeout = 5000;")
-                    await conn.execute(f"SELECT * FROM {self._objects_table_name} WHERE zoid = $1::varchar({MAX_UID_LENGTH}) FOR UPDATE;", oid)
+                    await conn.execute(f"SELECT * FROM {self._objects_table_name} WHERE zoid = $1::varchar({MAX_UID_LENGTH}) OR parent_id = $1::varchar({MAX_UID_LENGTH}) FOR UPDATE;", oid)
                     result = await conn.fetch(
                         statement_sql,
                         oid,  # The OID of the object
