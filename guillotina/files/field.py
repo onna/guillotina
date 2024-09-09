@@ -168,9 +168,9 @@ async def deserialize_cloud_field(field, value, context):
     )
     return val
 
+
 @implementer(IBlobMetadata)
 class BlobMetadata:
-
     def __init__(self, name: str, bucket: str, size: int, createdTime: Optional[datetime]):
         self.name = name
         self.bucket = bucket

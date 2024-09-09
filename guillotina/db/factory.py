@@ -50,7 +50,7 @@ def _convert_dsn(obj):
     return txt.format(**obj)
 
 
-async def _PGConfigurationFactory(key, dbconfig, loop=None, storage_factory=PostgresqlStorage):
+async def _PGConfigurationFactory(key, dbconfig, storage_factory=PostgresqlStorage):
     if isinstance(dbconfig["dsn"], str):
         dsn = dbconfig["dsn"]
     else:
@@ -67,10 +67,7 @@ async def _PGConfigurationFactory(key, dbconfig, loop=None, storage_factory=Post
     connection_options = _get_connection_options(dbconfig)
 
     aps = storage_factory(**dbconfig)
-    if loop is not None:
-        await aps.initialize(loop=loop, **connection_options)
-    else:
-        await aps.initialize(**connection_options)
+    await aps.initialize(**connection_options)
 
     if "transaction_manager" in dbconfig:
         transaction_manager = resolve_dotted_name(dbconfig["transaction_manager"])
@@ -82,12 +79,12 @@ async def _PGConfigurationFactory(key, dbconfig, loop=None, storage_factory=Post
 
 
 @configure.utility(provides=IDatabaseConfigurationFactory, name="postgresql")
-async def PGDatabaseConfigurationFactory(key, dbconfig, loop=None):
-    return await _PGConfigurationFactory(key, dbconfig, loop=loop)
+async def PGDatabaseConfigurationFactory(key, dbconfig):
+    return await _PGConfigurationFactory(key, dbconfig)
 
 
 @configure.utility(provides=IDatabaseConfigurationFactory, name="DUMMY")
-async def DummyDatabaseConfigurationFactory(key, dbconfig, loop=None):
+async def DummyDatabaseConfigurationFactory(key, dbconfig):
     dss = DummyStorage()
     db = Database(key, dss)
     await db.initialize()
@@ -95,7 +92,7 @@ async def DummyDatabaseConfigurationFactory(key, dbconfig, loop=None):
 
 
 @configure.utility(provides=IDatabaseConfigurationFactory, name="DUMMY_FILE")
-async def DummyFileDatabaseConfigurationFactory(key, dbconfig, loop=None):
+async def DummyFileDatabaseConfigurationFactory(key, dbconfig):
     dss = DummyFileStorage(dbconfig.get("filename", "g.db"))
     db = Database(key, dss)
     await db.initialize()
@@ -107,7 +104,7 @@ DELETE_DB = """DROP DATABASE "{}";"""
 
 
 def _safe_db_name(name):
-    return "".join([l for l in name if l in string.digits + string.ascii_lowercase + "-_"])
+    return "".join([char for char in name if char in string.digits + string.ascii_lowercase + "-_"])
 
 
 @configure.adapter(for_=IApplication, provides=IDatabaseManager, name="postgresql")  # noqa: N801

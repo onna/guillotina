@@ -35,7 +35,6 @@ import logging
 import sys
 import time
 
-
 _EMPTY = "__<EMPTY VALUE>__"
 TID_VERIFY_SKIP = {"Container", "guillotina.db.db.Root", "User"}
 
@@ -171,6 +170,7 @@ class Transaction:
     user = None
 
     def __init__(self, manager, loop=None, read_only: bool = False, cache=None, strategy=None):
+
         # Transaction Manager
         self._manager = manager
 
@@ -186,7 +186,7 @@ class Transaction:
         # some databases need to lock during queries
         # this provides a lock for each transaction
         # which would correspond with one connection
-        self._lock = asyncio.Lock(loop=loop)
+        self._lock = asyncio.Lock()
 
     def initialize(self, read_only, cache=None, strategy=None):
         self._read_only = read_only
@@ -681,6 +681,8 @@ class Transaction:
         result = None
         if cache_key in self._annotation_cache:
             result = self._annotation_cache[cache_key]
+            self._cache._hits += 1
+
         if result and result != _EMPTY:
             return result
         if not result:

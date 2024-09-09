@@ -19,7 +19,9 @@ class Response(Exception):
     empty_body = False
     default_content: dict = {}  # noqa
 
-    def __init__(self, *, content: dict = None, headers: dict = None, status: int = None) -> None:
+    def __init__(
+        self, *, content: dict = None, headers: dict = None, status: int = None
+    ) -> None:  # type: ignore
         """
         :param content: content to serialize
         :param headers: headers to set on response
@@ -49,8 +51,8 @@ class ErrorResponse(Response):
         message: str,
         *,
         reason=None,
-        content: dict = None,
-        headers: dict = None,
+        content: dict = {},
+        headers: dict = {},
         status: int = 500,
     ) -> None:
         """
@@ -118,11 +120,11 @@ class HTTPPartialContent(HTTPSuccessful):
 
 
 class _HTTPMove(HTTPRedirection):
-    def __init__(self, location: str, *, content: dict = None, headers: dict = None) -> None:
+    def __init__(self, location: str, *, content: dict = None, headers: dict = None) -> None:  # type: ignore
         if not location:
             raise ValueError("HTTP redirects need a location to redirect to.")
         super().__init__(content=content, headers=headers)
-        self.headers["Location"] = str(location)
+        self.headers["Location"] = str(location)  # type: ignore
         self.location = location
 
 
@@ -222,7 +224,12 @@ class HTTPMethodNotAllowed(HTTPClientError):
     status_code = 405
 
     def __init__(
-        self, method: str, allowed_methods: list, *, content: dict = None, headers: dict = None
+        self,
+        method: str,
+        allowed_methods: list,
+        *,
+        content: dict = None,
+        headers: dict = None,  # type: ignore
     ) -> None:
         """
         :param method: method not allowed
@@ -232,7 +239,7 @@ class HTTPMethodNotAllowed(HTTPClientError):
         """
         allow = ",".join(sorted(allowed_methods))
         super().__init__(content=content, headers=headers)
-        self.headers["Allow"] = allow
+        self.headers["Allow"] = allow  # type: ignore
         self.allowed_methods = allowed_methods
         self.method = method.upper()
 

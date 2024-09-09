@@ -81,10 +81,12 @@ class IFileStorageManager(Interface):
         copy file to another file
         """
 
+
 class IExternalFileStorageManager(IFileStorageManager):
     """
     File manager that uses database to store upload state
     """
+
 
 class IFileManager(Interface):
     """Interface to create uploaders and downloaders."""
@@ -134,6 +136,7 @@ class IFileManager(Interface):
         Copy current file to new one
         """
 
+
 class IBlobMetadata(Interface):
 
     name: str = Attribute("""The key used to access the file""")
@@ -141,8 +144,8 @@ class IBlobMetadata(Interface):
     size: int = Attribute("""The size of the file in bytes""")
     bucket: str = Attribute("""The bucket the file is located in""")
 
-class IBlobVacuum(Interface):
 
+class IBlobVacuum(Interface):
     async def get_blobs(
         page_token: Optional[str] = None, prefix=None, max_keys=1000
     ) -> Tuple[List[IBlobMetadata], str]:

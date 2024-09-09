@@ -17,7 +17,7 @@ def import_class(import_string: str) -> types.ModuleType:
     :param import_string: dotted class name
     """
     t = import_string.rsplit(".", 1)
-    return getattr(importlib.import_module(t[0]), t[1], None)
+    return getattr(importlib.import_module(t[0]), t[1], None)  # type: ignore
 
 
 def resolve_dotted_name(name: str) -> Any:
@@ -67,7 +67,7 @@ def resolve_module_path(path: str) -> str:
 
 
 def get_module_dotted_name(ob) -> str:
-    return getattr(ob, "__module__", None) or getattr(ob, "__name__", None)
+    return getattr(ob, "__module__", None) or getattr(ob, "__name__", None)  # type: ignore
 
 
 def get_dotted_name(ob: ResolvableType) -> str:

@@ -420,6 +420,8 @@ class LightweightConnection(asyncpg.connection.Connection):
             sql_reset=False,
             sql_close_all=self._server_caps.sql_close_all,
             plpgsql=self._server_caps.plpgsql,
+            jit=self._server_caps.jit,
+            sql_copy_from_where=self._server_caps.sql_copy_from_where,
         )
 
     async def add_listener(self, channel, callback):
@@ -433,7 +435,7 @@ class PGVacuum:
     def __init__(self, manager, loop):
         self._manager = manager
         self._loop = loop
-        self._queue = asyncio.Queue(loop=loop)
+        self._queue = asyncio.Queue()
         self._closed = False
         self._active = False
         self._sql = SQLStatements()
@@ -857,31 +859,39 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
             await self._connection_manager.initialize(loop, **kw)
 
         with watch("initialize_db"):
-            async with self.pool.acquire(timeout=self._conn_acquire_timeout) as conn:
-                if await self.has_unique_constraint(conn):
-                    self._supports_unique_constraints = True
-
-                trash_sql = self._sql.get("CREATE_TRASH", self._objects_table_name)
-                try:
-                    await conn.execute(trash_sql)
-                except asyncpg.exceptions.ReadOnlySQLTransactionError:
-                    # Not necessary for read-only pg
-                    pass
-                except (asyncpg.exceptions.UndefinedTableError, asyncpg.exceptions.InvalidSchemaNameError):
-                    async with conn.transaction():
-                        await self.create(conn)
-                        # only available on new databases
-                        for constraint in self._unique_constraints:
-                            await conn.execute(
-                                constraint.format(
-                                    objects_table_name=self._objects_table_name,
-                                    constraint_name=clear_table_name(self._objects_table_name),
-                                    TRASHED_ID=TRASHED_ID,
-                                ).replace("CONCURRENTLY", "")
-                            )
+            try:
+                async with self.pool.acquire(timeout=self._conn_acquire_timeout) as conn:
+                    if await self.has_unique_constraint(conn):
                         self._supports_unique_constraints = True
+
+                    trash_sql = self._sql.get("CREATE_TRASH", self._objects_table_name)
+                    try:
                         await conn.execute(trash_sql)
-                        await notify(StorageCreatedEvent(self, db_conn=conn))
+                    except asyncpg.exceptions.ReadOnlySQLTransactionError:
+                        # Not necessary for read-only pg
+                        pass
+                    except (
+                        asyncpg.exceptions.UndefinedTableError,
+                        asyncpg.exceptions.InvalidSchemaNameError,
+                    ):
+                        async with conn.transaction():
+                            await self.create(conn)
+                            # only available on new databases
+                            for constraint in self._unique_constraints:
+                                await conn.execute(
+                                    constraint.format(
+                                        objects_table_name=self._objects_table_name,
+                                        constraint_name=clear_table_name(self._objects_table_name),
+                                        TRASHED_ID=TRASHED_ID,
+                                    ).replace("CONCURRENTLY", "")
+                                )
+                            self._supports_unique_constraints = True
+                            await conn.execute(trash_sql)
+                            await notify(StorageCreatedEvent(self, db_conn=conn))
+            except asyncpg.exceptions._base.InterfaceError as ex:
+                if "another operation is in progress" in ex.args[0]:
+                    await self.restart_connection()
+                raise
 
         self._connection_initialized_on = time.time()
 

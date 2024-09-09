@@ -50,7 +50,8 @@ class ServerCommand(Command):
         host = arguments.host or settings.get("host", "0.0.0.0")
         log_format = settings.get("access_log_format", AccessLogger.LOG_FORMAT)
         try:
-            web.run_app(app, host=host, port=port, access_log_format=log_format)
+            loop = asyncio.get_event_loop()
+            web.run_app(app, host=host, port=port, access_log_format=log_format, loop=loop)
         except asyncio.CancelledError:
             # server shut down, we're good here.
             pass

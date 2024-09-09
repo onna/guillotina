@@ -1,5 +1,6 @@
-from guillotina.component import get_utility
+from guillotina.component import get_utility, query_adapter
 from guillotina.contrib.cache.strategy import BasicCache
+from guillotina.db.interfaces import IWriter
 from guillotina.db.transaction import Transaction
 from guillotina.interfaces import ICacheUtility
 from guillotina.tests import mocks
@@ -20,7 +21,7 @@ DUMMY_DATA = (b"test", b"test")
 
 
 @pytest.mark.app_settings(DEFAULT_SETTINGS)
-async def test_cache_set(guillotina_main, loop):
+async def test_cache_set(db, guillotina_main, loop):
     util = get_utility(ICacheUtility)
     assert util.initialized
     trns = mocks.MockTransaction(mocks.MockTransactionManager())
@@ -36,7 +37,7 @@ async def test_cache_set(guillotina_main, loop):
 
 
 @pytest.mark.app_settings(DEFAULT_SETTINGS)
-async def test_cache_delete(guillotina_main, loop):
+async def test_cache_delete(db, guillotina_main, loop):
     util = get_utility(ICacheUtility)
     trns = mocks.MockTransaction(mocks.MockTransactionManager())
     trns.added = trns.deleted = {}
@@ -95,8 +96,13 @@ async def test_cache_object(guillotina_main, loop):
     cache = BasicCache(txn)
     txn._cache = cache
     ob = create_content()
-    await storage.store(None, None, None, DUMMY_DATA, ob, txn)
+
+    writer = query_adapter(ob, IWriter)
+    serialized = await writer.serialize()
+
+    await storage.store(None, None, None, serialized, ob, txn)
     loaded = await txn.get(ob.__uuid__)
+
     assert id(loaded) != id(ob)
     assert loaded.__uuid__ == ob.__uuid__
     assert cache._hits == 0
@@ -117,10 +123,17 @@ async def test_cache_object_from_child(guillotina_main, loop):
     ob = create_content()
     parent = create_content()
     ob.__parent__ = parent
-    await storage.store(None, None, None, DUMMY_DATA, parent, txn)
-    await storage.store(None, None, None, DUMMY_DATA, ob, txn)
 
-    loaded = await txn.get_child(parent, ob.id)
+    parent_writer = query_adapter(parent, IWriter)
+    serialized_parent = await parent_writer.serialize()
+
+    ob_writer = query_adapter(ob, IWriter)
+    serialized_ob = await ob_writer.serialize()
+
+    await storage.store(None, None, None, serialized_parent, parent, txn)
+    await storage.store(None, None, None, serialized_ob, ob, txn)
+
+    await txn.get_child(parent, ob.id)
     assert cache._hits == 0
     loaded = await txn.get_child(parent, ob.id)
     assert cache._hits == 1
@@ -138,7 +151,11 @@ async def test_do_not_cache_large_object(guillotina_main, loop):
     txn._cache = cache
     ob = create_content()
     ob.foobar = "X" * cache.max_cache_record_size  # push size above cache threshold
-    await storage.store(None, None, None, DUMMY_DATA, ob, txn)
+
+    writer = query_adapter(ob, IWriter)
+    serialized = await writer.serialize()
+
+    await storage.store(None, None, None, serialized, ob, txn)
     loaded = await txn.get(ob.__uuid__)
     assert id(loaded) != id(ob)
     assert loaded.__uuid__ == ob.__uuid__

@@ -122,7 +122,7 @@ try:
                 labels={"type": operation},
                 error_mappings={
                     "timeout": asyncio.TimeoutError,
-                    "cancelled": asyncio.CancelledError,
+                    "cancelled": asyncio.CancelledError,  # type: ignore
                 },  # type: ignore
             )
 
