@@ -1,6 +1,6 @@
 name: guillotina
 
-on: [push]
+on: [push, workflow_dispatch]
 
 jobs:
 
