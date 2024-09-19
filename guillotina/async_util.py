@@ -22,16 +22,15 @@ _zone = tzutc()
 
 
 class QueueUtility(object):
-    def __init__(self, settings=None, loop=None):
+    def __init__(self, settings=None):
         self._queue = None
-        self._loop = loop
         self._exceptions = False
         self._total_queued = 0
 
     @property
     def queue(self):
         if self._queue is None:
-            self._queue = asyncio.Queue(loop=self._loop)
+            self._queue = asyncio.Queue()
         return self._queue
 
     async def initialize(self, app=None):
@@ -126,7 +125,7 @@ class Job:
 
 
 class AsyncJobPool:
-    def __init__(self, settings=None, loop=None):
+    def __init__(self, settings=None):
         settings = settings or {"max_size": 5}
         self._loop = None
         self._running = []

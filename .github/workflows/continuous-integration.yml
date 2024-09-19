@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [3.8]
+        python-version: [3.10.14]
 
     steps:
       - name: Checkout the repository
@@ -24,8 +24,8 @@ jobs:
         run: |
           pip install click==8.0.4
           pip install flake8==3.7.7
-          pip install mypy==0.720
-          pip install mypy-zope==0.2.0
+          pip install mypy==1.0.1
+          pip install mypy-zope==0.3.2
           pip install black==19.10b0
       - name: Run pre-checks
         run: |
@@ -38,7 +38,7 @@ jobs:
 
     strategy:
       matrix:
-        python-version: [3.8]
+        python-version: [3.10.14]
         database: ["DUMMY", "postgres"]
         db_schema: ["custom", "public"]
         exclude:

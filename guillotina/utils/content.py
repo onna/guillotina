@@ -61,10 +61,10 @@ def iter_parents(content: IResource) -> typing.Iterator[IResource]:
 
     :param content: object to get path from
     """
-    content = getattr(content, "__parent__", None)
+    content = getattr(content, "__parent__", None)  # type: ignore
     while content is not None:
         yield content
-        content = getattr(content, "__parent__", None)
+        content = getattr(content, "__parent__", None)  # type: ignore
 
 
 def valid_id(_id) -> bool:
@@ -72,7 +72,7 @@ def valid_id(_id) -> bool:
     # can't start with _ or be path explorers
     if _id in (None, ".", "..") or _id[0] in ("_", "@"):
         return False
-    return _id == "".join([l for l in _id if l in app_settings["valid_id_characters"]])
+    return _id == "".join([char for char in _id if char in app_settings["valid_id_characters"]])
 
 
 async def get_containers():
@@ -149,7 +149,7 @@ async def navigate_to(obj: IAsyncContainer, path: str):
     return actual
 
 
-def get_object_url(ob: IResource, request: IRequest = None, **kwargs) -> typing.Optional[str]:
+def get_object_url(ob: IResource, request: IRequest = None, **kwargs) -> typing.Optional[str]:  # type: ignore
     """
     Generate full url of object.
 

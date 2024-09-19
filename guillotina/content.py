@@ -168,14 +168,13 @@ class Resource(guillotina.db.orm.base.BaseObject):
         """
         return self.__uuid__
 
-    def __init__(self, id: str = None) -> None:
+    def __init__(self, id: str = None) -> None:  # type: ignore
         if id is not None:
             self.__name__ = id
         super(Resource, self).__init__()
 
     def __repr__(self):
-        """
-        """
+        """ """
         path = "/".join(get_physical_path(self))
         return "< {type} at {path} by {mem} >".format(type=self.type_name, path=path, mem=id(self))
 
@@ -389,8 +388,7 @@ class Folder(Resource):
 
 @configure.contenttype(type_name="Container", schema=IContainer)
 class Container(Folder):
-    """
-    """
+    """ """
 
     async def install(self):
         # Creating and registering a local registry
@@ -424,12 +422,12 @@ class StaticDirectory(dict):
     Using dict makes this a simple container so traversing works
     """
 
-    def __init__(self, file_path: pathlib.Path, base_path: pathlib.Path = None) -> None:
+    def __init__(self, file_path: pathlib.Path, base_path: pathlib.Path = None) -> None:  # type: ignore
         self.file_path = file_path
         if base_path is None:
             self.base_path = file_path
         else:
-            self.base_path = base_path
+            self.base_path = base_path  # type: ignore
 
     def __getitem__(self, filename):
         path = pathlib.Path(os.path.join(self.file_path.absolute(), filename))
@@ -571,7 +569,7 @@ async def create_content(type_, **kw) -> IResource:
 @profilable
 async def create_content_in_container(
     parent: Folder, type_: str, id_: str, request: IRequest = None, check_security=True, **kw
-) -> Resource:
+) -> Resource:  # type: ignore
     """Utility to create a content.
 
     This method is the one to use to create content.
@@ -656,7 +654,7 @@ async def get_all_behaviors(content, create=False, load=True, preload_only=False
         annotation_data = await txn.get_annotations(content, list(data_keys))
         for inst in instances:
             key = getattr(inst, "__annotations_data_key__", None)
-            if key and key in annotation_data:
+            if annotation_data and key and key in annotation_data:
                 content.__gannotations__[key] = annotation_data[key]
     if preload_only:
         return []

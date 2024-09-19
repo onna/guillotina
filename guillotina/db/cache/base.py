@@ -79,7 +79,13 @@ class BaseCache:
         raise NotImplemented()
 
     async def set(
-        self, value, keyset: List[Dict[str, Any]] = None, oid=None, container=None, id=None, variant=None
+        self,
+        value,
+        keyset: List[Dict[str, Any]] = None,
+        oid=None,
+        container=None,
+        id=None,
+        variant=None,  # type: ignore
     ):
         """
         Use params to build cache key

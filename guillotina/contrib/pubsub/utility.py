@@ -14,8 +14,7 @@ logger = logging.getLogger("guillotina")
 
 
 class PubSubUtility:
-    def __init__(self, settings=None, loop=None):
-        self._loop = loop
+    def __init__(self, settings=None):
         self._settings = settings
         self._subscribers = {}
         self._initialized = False
@@ -43,8 +42,9 @@ class PubSubUtility:
     @backoff.on_exception(backoff.expo, (OSError,), max_time=30, max_tries=4)
     async def _connect(self):
         klass = resolve_dotted_name(self._settings["driver"])
+        loop = asyncio.get_event_loop()
         self._driver = await klass.get_driver()
-        await self._driver.initialize(self._loop)
+        await self._driver.initialize(loop)
         self._initialized = True
 
     async def finalize(self, app):

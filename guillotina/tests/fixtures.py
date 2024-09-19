@@ -285,7 +285,7 @@ async def close_async_tasks(app):
 @pytest.fixture(scope="function")
 def dummy_guillotina(loop, request):
     globalregistry.reset()
-    aioapp = loop.run_until_complete(make_app(settings=get_dummy_settings(request.node), loop=loop))
+    aioapp = loop.run_until_complete(make_app(settings=get_dummy_settings(request.node)))
     aioapp.config.execute_actions()
     load_cached_schema()
     yield aioapp
@@ -302,13 +302,13 @@ class DummyRequestAsyncContextManager(object):
         self.loop = loop
 
     async def __aenter__(self):
-        task = asyncio.Task.current_task(loop=self.loop)
+        task = asyncio.current_task(loop=self.loop)
         if task is not None:
             task.request = self.request
         return self.request
 
     async def __aexit__(self, exc_type, exc, tb):
-        task = asyncio.Task.current_task(loop=self.loop)
+        task = asyncio.current_task(loop=self.loop)
         del task.request
 
 
@@ -504,7 +504,7 @@ async def dbusers_requester(guillotina):
 
 
 @pytest.fixture(scope="function")
-async def metrics_registry():
+async def metrics_registry(loop):
     for collector in prometheus_client.registry.REGISTRY._names_to_collectors.values():
         if not hasattr(collector, "_metrics"):
             continue

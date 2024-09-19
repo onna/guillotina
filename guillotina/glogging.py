@@ -36,11 +36,11 @@ def _wrapped(name):
             extra.update(
                 {
                     "method": request.method,
-                    "url": url,
+                    "resource_url": url,
                     "container": getattr(container, "id", None),
-                    "account": getattr(container, "id", None),
+                    "account_id": getattr(container, "id", None),
                     "db_id": getattr(db, "id", None),
-                    "user": get_authenticated_user_id() or "Anonymous",
+                    "user_id": get_authenticated_user_id() or "Anonymous",
                     "eid": eid,
                     "agent": agent,
                     # in case a fake req object doesn't use the guillotina Request object

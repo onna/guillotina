@@ -1,4 +1,4 @@
-from asyncmock import AsyncMock
+from unittest.mock import AsyncMock
 from guillotina import metrics
 from guillotina._settings import app_settings
 from guillotina.const import ROOT_ID

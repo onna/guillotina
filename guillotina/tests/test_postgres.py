@@ -8,7 +8,7 @@ from guillotina.exceptions import ConflictError
 from guillotina.tests import mocks
 from guillotina.tests.utils import create_content
 from guillotina.utils import execute
-from unittest.mock import Mock, MagicMock
+from unittest.mock import MagicMock
 from unittest.mock import patch
 from uuid import uuid4
 
@@ -101,7 +101,8 @@ async def test_restart_connection_pg(db, dummy_guillotina):
     aps = await get_aps(db)
     with TransactionManager(aps) as tm:
         # Test it works
-        await tm._storage.get_next_tid(Mock())
+        txn = await tm.begin()
+        await tm._storage.get_next_tid(txn)
 
         # Simulate connection was initialized a long time ago
         tm._storage._connection_initialized_on = 0
@@ -113,10 +114,10 @@ async def test_restart_connection_pg(db, dummy_guillotina):
             ),
         ):
             with pytest.raises(ConflictError):
-                await tm._storage.get_next_tid(Mock())
+                await tm._storage.get_next_tid(txn)
 
         # Test works again
-        await tm._storage.get_next_tid(Mock())
+        await tm._storage.get_next_tid(txn)
 
         await aps.remove()
         await cleanup(aps)

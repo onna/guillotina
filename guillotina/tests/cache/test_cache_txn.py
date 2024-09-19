@@ -1,4 +1,4 @@
-from asyncmock import AsyncMock
+from unittest.mock import AsyncMock
 from guillotina import app_settings
 from guillotina.annotations import AnnotationData
 from guillotina.api.container import create_container

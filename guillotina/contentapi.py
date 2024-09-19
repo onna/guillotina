@@ -51,7 +51,7 @@ class ContentAPI:
             task_vars.txn.set(self._active_txn)
         return self._active_txn
 
-    async def create(self, payload: dict, in_: IResource = None) -> IResource:
+    async def create(self, payload: dict, in_: IResource = None) -> IResource:  # type: ignore
         await self.get_transaction()
         if in_ is None:
             in_ = self.db
@@ -70,7 +70,7 @@ class ContentAPI:
             path = path[len(container_url or "") :]
         return await navigate_to(in_, path.strip("/"))  # type: ignore
 
-    async def get(self, path: str, in_: IResource = None) -> typing.Optional[IResource]:
+    async def get(self, path: str, in_: IResource = None) -> typing.Optional[IResource]:  # type: ignore
         await self.get_transaction()
         if in_ is None:
             in_ = self.db

@@ -250,9 +250,9 @@ class DefaultPOST(Service):
 
         obj = await post(  # type: ignore
             context=self.context,
-            data=data,
-            _id=new_id,
-            user=user,
+            data=data,  # type: ignore
+            _id=new_id,  # type: ignore
+            user=user,  # type: ignore
             type_=type_,
             request=self.request,
             check_security=check_security,

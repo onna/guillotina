@@ -28,7 +28,7 @@ DEFAULT_SETTINGS = {
 
 
 @pytest.mark.app_settings(DEFAULT_SETTINGS)
-async def test_invalidate_object(redis_container, guillotina_main, loop):
+async def test_invalidate_object(db, redis_container, guillotina_main, loop):
     util = get_utility(ICacheUtility)
     await util.initialize()
     assert util.initialized
