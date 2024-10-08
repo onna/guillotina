@@ -14,6 +14,7 @@ from guillotina.schema.interfaces import IList
 from guillotina.schema.interfaces import IObjectJSONField
 from guillotina.schema.interfaces import ITuple
 from guillotina.utils import apply_coroutine
+from typing import Optional
 from zope.interface import implementer
 
 
@@ -56,7 +57,7 @@ class PatchField(schema.Field):
 @configure.value_deserializer(IPatchField)
 def field_converter(field, value, context):
     field.field.__name__ = field.__name__
-    if isinstance(value, dict) and "op" in value:
+    if isinstance(value, dict) and "op" in value and isinstance(value["op"], Optional[str]):
         if not isinstance(value, dict):
             raise ValueDeserializationError(field, value, "Not an object")
         operation_name = value.get("op", "undefined")

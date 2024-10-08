@@ -710,6 +710,31 @@ async def test_dates_bucket_list_field(dummy_request, mock_txn):
     assert content.datetime_bucket_list.annotations_metadata[0]["len"] == 3
 
 
+async def test_patch_dict_of_obj_deserialize(dummy_request, mock_txn):
+    login()
+    content = create_content()
+    deserializer = get_multi_adapter((content, dummy_request), IResourceDeserializeFromJson)
+    errors = []
+    await deserializer.set_schema(
+        ITestSchema, content, {"patch_dict_of_obj": {"op": {"foo": "bar"}}}, errors,
+    )
+
+    assert len(errors) == 0
+    assert len(content.patch_dict_of_obj) == 1
+    assert content.patch_dict_of_obj["op"] == {"foo": "bar"}
+
+    await deserializer.set_schema(
+        ITestSchema,
+        content,
+        {"patch_dict_of_obj": {"op": "update", "value": [{"key": "op", "value": {"bar": 1}}]}},
+        errors,
+    )
+
+    assert len(errors) == 0
+    assert len(content.patch_dict_of_obj) == 1
+    assert content.patch_dict_of_obj["op"] == {"bar": 1}
+
+
 async def test_patchfield_notdefined_field(dummy_request, mock_txn):
     login()
     content = create_content()
