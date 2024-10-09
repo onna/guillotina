@@ -394,7 +394,11 @@ def restart_conn_on_exception(f):
     async def decorator(self: "PostgresqlStorage", *args, **kwargs):
         try:
             return await f(self, *args, **kwargs)
-        except (asyncpg.exceptions.PostgresConnectionError, asyncpg.exceptions.InterfaceError) as ex:
+        except (
+            asyncpg.exceptions.PostgresConnectionError,
+            asyncpg.exceptions.InterfaceError,
+            asyncpg.exceptions.ConnectionDoesNotExistError,
+        ) as ex:
             await self._check_bad_connection(ex)
             raise
 
@@ -889,8 +893,15 @@ WHERE tablename = '{}' AND indexname = '{}_parent_id_id_key';
                             await conn.execute(trash_sql)
                             await notify(StorageCreatedEvent(self, db_conn=conn))
             except asyncpg.exceptions._base.InterfaceError as ex:
-                if "another operation is in progress" in ex.args[0]:
-                    await self.restart_connection()
+
+                for err in (
+                    "connection is closed",
+                    "pool is closed",
+                    "connection was closed",
+                    "another operation is in progress",
+                ):
+                    if err in ex.args[0]:
+                        await self.restart_connection()
                 raise
 
         self._connection_initialized_on = time.time()
