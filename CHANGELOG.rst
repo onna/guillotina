@@ -1,5 +1,10 @@
 CHANGELOG
 =========
+5.5.4 (2025-01-09)
+-------------------
+
+- Add delete file endpoint
+
 5.5.3 (2024-10-09)
 -------------------
 - More PG handling improvements
