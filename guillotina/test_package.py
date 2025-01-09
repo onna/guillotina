@@ -342,13 +342,11 @@ class IDGenerator(object):
 
 
 class IMemoryFileField(IFileField):
-    """
-    """
+    """ """
 
 
 class IInMemoryCloudFile(IFile):
-    """
-    """
+    """ """
 
 
 @configure.adapter(for_=(dict, IMemoryFileField), provides=IJSONToValue)
@@ -393,11 +391,14 @@ class InMemoryFileManager:
         if uri is None:
             file = self.field.get(self.field.context or self.context)
             uri = file.uri
-        with open(_tmp_files[uri], "rb") as fi:
-            chunk = fi.read(1024)
-            while chunk:
-                yield chunk
+        try:
+            with open(_tmp_files[uri], "rb") as fi:
                 chunk = fi.read(1024)
+                while chunk:
+                    yield chunk
+                    chunk = fi.read(1024)
+        except KeyError:
+            raise AttributeError("File not found")
 
     async def start(self, dm):
         upload_file_id = dm.get("upload_file_id")
@@ -466,6 +467,14 @@ class InMemoryFileManager:
                 "filename": file.filename or "unknown",
             }
         )
+
+    async def delete(self):
+        file = self.field.get(self.field.context or self.context)
+        if file.uri in _tmp_files:
+            os.remove(_tmp_files[file.uri])
+            del _tmp_files[file.uri]
+            return True
+        return False
 
 
 @implementer(IMemoryFileField)

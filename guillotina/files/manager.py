@@ -470,3 +470,12 @@ class FileManager(object):
     async def copy(self, to_manager):
         await to_manager.dm.load()
         await self.file_storage_manager.copy(to_manager.file_storage_manager, to_manager.dm)
+
+    async def delete(self):
+        await self.dm.load()
+        await self.dm.start()
+
+        result = await self.file_storage_manager.delete()
+        await self.dm.finish()
+
+        return result

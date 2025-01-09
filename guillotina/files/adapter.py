@@ -253,3 +253,17 @@ class DBFileStorageManagerAdapter:
         await to_storage_manager.append(dm, to_storage_manager.iter_data(), 0)
         await to_storage_manager.finish(dm)
         await dm.finish()
+
+    async def delete(self):
+        file = self.field.get(self.field.context or self.context)
+        if file is not None:
+            try:
+                blob = file._blob
+                bfile = blob.open("r")
+                await bfile.async_del()
+                self.field.set(self.field.context or self.context, None)
+                self.field.context.register()
+                return True
+            except AttributeError:
+                pass
+        return False
