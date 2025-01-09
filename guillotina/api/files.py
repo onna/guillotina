@@ -47,6 +47,7 @@ TUS_PARAMETERS = [
     {"name": "UPLOAD-METADATA", "in": "header", "required": False, "schema": {"type": "string"}},
 ]
 
+
 # Static File
 @configure.service(context=IStaticFile, method="GET", permission="guillotina.AccessContent")
 class FileGET(DownloadService):
@@ -360,3 +361,16 @@ class TusOptionsFile(DefaultOPTIONS, UploadFile):
         # for the field to save there by chunks
         adapter = get_multi_adapter((self.context, self.request, self.field), IFileManager)
         return await adapter.tus_options()
+
+
+@configure.service(
+    context=IResource,
+    method="PATCH",
+    permission="guillotina.ModifyContent",
+    name="@delete/{field_name}",
+    **_traversed_file_doc("Delete the content of a file"),
+)
+class DeleteFile(TraversableFieldService):
+    async def __call__(self):
+        adapter = get_multi_adapter((self.context, self.request, self.field), IFileManager)
+        return await adapter.delete()

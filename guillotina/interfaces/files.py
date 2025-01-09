@@ -136,6 +136,11 @@ class IFileManager(Interface):
         Copy current file to new one
         """
 
+    async def delete():
+        """
+        Delete the file
+        """
+
 
 class IBlobMetadata(Interface):
 
@@ -218,5 +223,4 @@ class IDBFileField(ICloudFileField):
 
 
 class IDBFile(IFile):
-    """Marker for a DBFile
-    """
+    """Marker for a DBFile"""

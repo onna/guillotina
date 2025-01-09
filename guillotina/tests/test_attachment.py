@@ -865,3 +865,37 @@ async def test_upload_errors(manager_type, redis_container, container_requester)
             },
         )
         assert status == 412
+
+
+@pytest.mark.parametrize("manager_type", _pytest_params)
+async def test_delete_upload(manager_type, redis_container, container_requester):
+    async with container_requester as requester:
+        response, status = await requester(
+            "POST",
+            "/db/guillotina/",
+            data=json.dumps({"@type": "Item", "@behaviors": [IAttachment.__identifier__], "id": "foobar"}),
+        )
+        assert status == 201
+
+        response, status = await requester(
+            "PATCH",
+            "/db/guillotina/foobar/@upload/file",
+            data=b"X" * 1024 * 1024 * 4,
+            headers={"x-upload-size": str(1024 * 1024 * 4)},
+        )
+        assert status == 200
+
+        response, status = await requester("GET", "/db/guillotina/foobar/@download/file")
+        assert status == 200
+
+        response, status = await requester("PATCH", "/db/guillotina/foobar/@delete/file")
+        assert status == 200
+        assert response is True
+
+        response, status = await requester("PATCH", "/db/guillotina/foobar/@delete/file")
+        assert status == 200
+        assert response is False
+
+        response, status = await requester("GET", "/db/guillotina/foobar/@download/file")
+        assert response == {"reason": "File does not exist"}
+        assert status == 404
