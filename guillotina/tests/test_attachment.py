@@ -877,6 +877,11 @@ async def test_delete_upload(manager_type, redis_container, container_requester)
         )
         assert status == 201
 
+        # No file to start with
+        response, status = await requester("GET", "/db/guillotina/foobar")
+        assert status == 200
+        assert response["guillotina.behaviors.attachment.IAttachment"]["file"] is None
+
         response, status = await requester(
             "PATCH",
             "/db/guillotina/foobar/@upload/file",
@@ -885,6 +890,11 @@ async def test_delete_upload(manager_type, redis_container, container_requester)
         )
         assert status == 200
 
+        # File attribute is now not empty
+        response, status = await requester("GET", "/db/guillotina/foobar")
+        assert status == 200
+        assert response["guillotina.behaviors.attachment.IAttachment"]["file"] is not None
+
         response, status = await requester("GET", "/db/guillotina/foobar/@download/file")
         assert status == 200
 
@@ -892,6 +902,12 @@ async def test_delete_upload(manager_type, redis_container, container_requester)
         assert status == 200
         assert response is True
 
+        # Check the file attribute is now empty
+        response, status = await requester("GET", "/db/guillotina/foobar")
+        assert status == 200
+        assert response["guillotina.behaviors.attachment.IAttachment"]["file"] is None
+
+        # False if we try to delete again
         response, status = await requester("PATCH", "/db/guillotina/foobar/@delete/file")
         assert status == 200
         assert response is False

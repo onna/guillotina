@@ -89,41 +89,45 @@ class DBDataManager:
     async def save(self, **kwargs):
         pass
 
-    async def finish(self, values=None):
+    async def finish(self, values=None, clear_data=False):
         # create file object with new data from finished upload
         try:
             file = self.field.get(self.real_context)
         except AttributeError:
             file = None
 
-        if file is None:
-            file = self.file_storage_manager.file_class()
+        if clear_data:
+            file = None
         else:
-            # save previous data on file.
-            # we do this instead of creating a new file object on every
-            # save just in case other implementations want to use the file
-            # object to store different data
-            file._old_uri = file.uri
-            file._old_size = file.size
-            file._old_filename = file.filename
-            file._old_md5 = file.md5
-            file._old_content_type = file.guess_content_type()
+            if file is None:
+                file = self.file_storage_manager.file_class()
+            else:
+                # save previous data on file.
+                # we do this instead of creating a new file object on every
+                # save just in case other implementations want to use the file
+                # object to store different data
+                file._old_uri = file.uri
+                file._old_size = file.size
+                file._old_filename = file.filename
+                file._old_md5 = file.md5
+                file._old_content_type = file.guess_content_type()
 
-            if getattr(file, "_blob", None):
-                cleanup = IFileCleanup(self.context, None)
-                if cleanup is None or cleanup.should_clean(file=file):
-                    bfile = file._blob.open("r")
-                    await bfile.async_del()
-                else:
-                    file._previous_blob = getattr(file, "_blob", None)
+                if getattr(file, "_blob", None):
+                    cleanup = IFileCleanup(self.context, None)
+                    if cleanup is None or cleanup.should_clean(file=file):
+                        bfile = file._blob.open("r")
+                        await bfile.async_del()
+                    else:
+                        file._previous_blob = getattr(file, "_blob", None)
+
+            if values is None:
+                values = self._data
+            for key, value in values.items():
+                setattr(file, key, value)
 
         await notify(FileBeforeUploadFinishedEvent(self.context, field=self.field, file=file, dm=self))
 
-        if values is None:
-            values = self._data
         self.field.set(self.real_context, file)
-        for key, value in values.items():
-            setattr(file, key, value)
 
         if self.field.__name__ in getattr(self.context, "__uploads__", {}):
             del self.context.__uploads__[self.field.__name__]
@@ -261,8 +265,11 @@ class DBFileStorageManagerAdapter:
                 blob = file._blob
                 bfile = blob.open("r")
                 await bfile.async_del()
+
+                # Set the file attribute to None
                 self.field.set(self.field.context or self.context, None)
                 self.field.context.register()
+
                 return True
             except AttributeError:
                 pass
