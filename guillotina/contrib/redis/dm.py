@@ -85,8 +85,8 @@ class RedisFileDataManager(DBDataManager):
     async def update(self, **kwargs):
         self._data.update(kwargs)
 
-    async def finish(self, values=None):
-        val = await super().finish(values=values)
+    async def finish(self, values=None, clear_data=False):
+        val = await super().finish(values=values, clear_data=clear_data)
         txn = get_transaction()
         txn.add_after_commit_hook(self._delete_key)
         return val

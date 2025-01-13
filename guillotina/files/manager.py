@@ -475,7 +475,11 @@ class FileManager(object):
         await self.dm.load()
         await self.dm.start()
 
-        result = await self.file_storage_manager.delete()
-        await self.dm.finish()
+        result = False
+        file = self.field.get(self.field.context or self.context)
+        if file:
+            result = await self.file_storage_manager.delete()
+
+        await self.dm.finish(clear_data=True)
 
         return result

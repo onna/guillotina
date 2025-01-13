@@ -1,8 +1,11 @@
 CHANGELOG
 =========
+5.5.5 (2025-01-10)
+-------------------
+- More delete file handling improvements
+
 5.5.4 (2025-01-09)
 -------------------
-
 - Add delete file endpoint
 
 5.5.3 (2024-10-09)

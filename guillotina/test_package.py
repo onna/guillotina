@@ -445,7 +445,7 @@ class InMemoryFileManager:
         await dm.update(_chunks=chunk_count)
         return count
 
-    async def finish(self, dm):
+    async def finish(self, dm, clear_data=False):
         await dm.update(uri=dm.get("upload_file_id"), upload_file_id=None)
 
     async def exists(self):
@@ -470,9 +470,13 @@ class InMemoryFileManager:
 
     async def delete(self):
         file = self.field.get(self.field.context or self.context)
-        if file.uri in _tmp_files:
+        if file and file.uri in _tmp_files:
             os.remove(_tmp_files[file.uri])
             del _tmp_files[file.uri]
+
+            self.field.set(self.field.context or self.context, None)
+            self.field.context.register()
+
             return True
         return False
 
