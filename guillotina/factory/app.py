@@ -40,7 +40,7 @@ import asyncio
 import json
 import logging
 import logging.config
-
+import random
 
 try:
     from aiohttp.web_log import AccessLogger  # type: ignore
@@ -157,6 +157,14 @@ class GuillotinaAIOHTTPApplication(web.Application):
             return await super()._handle(request)
         except (ConflictError, TIDConflictError) as e:
             if app_settings.get("conflict_retry_attempts", 3) > retries:
+
+                if app_settings.get("conflict_retry_delay", 0) > 0:
+                    backoff_delay = app_settings.get("conflict_retry_delay", 0.5)
+                    delay = backoff_delay * (2 ** retries)
+
+                    jitter = random.uniform(0, delay * 1)  # jitter up to 100% of delay
+                    await asyncio.sleep(delay + jitter)
+
                 label = "DB Conflict detected"
                 if isinstance(e, TIDConflictError):
                     label = "TID Conflict Error detected"
