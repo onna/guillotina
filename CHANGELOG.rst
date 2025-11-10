@@ -1,5 +1,9 @@
 CHANGELOG
 =========
+5.5.6 (2025-11-10)
+-------------------
+- Add TID conflict retry delay option
+
 5.5.5 (2025-01-10)
 -------------------
 - More delete file handling improvements
