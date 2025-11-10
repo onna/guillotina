@@ -160,9 +160,9 @@ class GuillotinaAIOHTTPApplication(web.Application):
 
                 if app_settings.get("conflict_retry_delay", 0) > 0:
                     backoff_delay = app_settings.get("conflict_retry_delay", 0.5)
-                    delay = backoff_delay * (2 ** retries)
+                    delay = backoff_delay * (2**retries)
 
-                    jitter = random.uniform(0, delay * 1) # jitter up to 100% of delay
+                    jitter = random.uniform(0, delay * 1)  # jitter up to 100% of delay
                     await asyncio.sleep(delay + jitter)
 
                 label = "DB Conflict detected"
