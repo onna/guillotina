@@ -435,6 +435,8 @@ class TraversalRouter(AbstractRouter):
         except (ConflictError, asyncio.CancelledError):
             # can also happen from connection errors so we bubble this...
             raise
+        except HTTPUnauthorized:
+            raise
         except Exception as _exc:
             logger.error("Unhandled exception occurred", exc_info=True)
             request.resource = request.tail = None
