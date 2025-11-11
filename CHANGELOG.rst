@@ -1,5 +1,10 @@
 CHANGELOG
 =========
+
+5.5.7 (2025-11-11)
+-------------------
+- Re-raise HTTPUnauthorized instead of handling it as a generic exception
+
 5.5.6 (2025-11-10)
 -------------------
 - Add TID conflict retry delay option
