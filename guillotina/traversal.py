@@ -174,6 +174,11 @@ class BaseMatchInfo(AbstractMatchInfo):
     def apps(self):
         return tuple(self._apps)
 
+    @property
+    def route(self):
+        # aiohttp 3.11+ accesses match_info.route for middleware caching
+        return None
+
     def freeze(self):
         self._frozen = True
 
