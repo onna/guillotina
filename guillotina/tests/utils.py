@@ -201,6 +201,7 @@ def make_mocked_request(
 
     if protocol is sentinel:
         protocol = mock.Mock()
+        type(protocol).ssl_context = mock.PropertyMock(return_value=sslcontext)
 
     if transport is sentinel:
         transport = test_utils._create_transport(sslcontext)
