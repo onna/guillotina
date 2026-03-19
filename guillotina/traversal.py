@@ -160,6 +160,10 @@ class BaseMatchInfo(AbstractMatchInfo):
     def current_app(self):
         return self._current_app
 
+    @current_app.setter
+    def current_app(self, app):
+        self._current_app = app
+
     @contextmanager
     def set_current_app(self, app):
         assert app in self._apps, "Expected one of the following apps {!r}, got {!r}".format(self._apps, app)
@@ -173,6 +177,11 @@ class BaseMatchInfo(AbstractMatchInfo):
     @property
     def apps(self):
         return tuple(self._apps)
+
+    @property
+    def route(self):
+        # aiohttp 3.11+ accesses match_info.route for middleware caching
+        return None
 
     def freeze(self):
         self._frozen = True
