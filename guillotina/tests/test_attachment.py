@@ -13,6 +13,7 @@ import json
 import pytest
 import random
 
+
 _pytest_params = [
     pytest.param("db", marks=pytest.mark.app_settings({"cloud_datamanager": "db"})),
     pytest.param(
@@ -922,23 +923,17 @@ async def test_download_sanitizes_control_chars_in_filename(
 ):
     """Files with control characters in filename should download without 502."""
     async with container_requester as requester:
-        _, status = await requester(
+        response, status = await requester(
             "POST",
             "/db/guillotina/",
-            data=json.dumps(
-                {
-                    "@type": "Item",
-                    "@behaviors": [IAttachment.__identifier__],
-                    "id": "foobar",
-                }
-            ),
+            data=json.dumps({"@type": "Item", "@behaviors": [IAttachment.__identifier__], "id": "foobar"}),
         )
         assert status == 201
 
         # Upload with a filename containing control characters via base64 header
         bad_filename = "test\x0bfile\x00name.txt"
         filename_b64 = base64.b64encode(bad_filename.encode("utf-8")).decode("ascii")
-        _, status = await requester(
+        response, status = await requester(
             "PATCH",
             "/db/guillotina/foobar/@upload/file",
             data=b"test content",
@@ -949,7 +944,9 @@ async def test_download_sanitizes_control_chars_in_filename(
         )
         assert status == 200
 
-        _, status, headers = await requester.make_request("GET", "/db/guillotina/foobar/@download/file")
+        response, status, headers = await requester.make_request(
+            "GET", "/db/guillotina/foobar/@download/file"
+        )
         assert status == 200
         content_disposition = headers.get("Content-Disposition", "")
         assert "\x0b" not in content_disposition
