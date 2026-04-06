@@ -293,6 +293,6 @@ class TestSanitizeFilenameForHeader:
         assert utils.sanitize_filename_for_header("") == ""
 
     def test_actual_bug_filename(self):
-        filename = "COLOMATE- Colorectal Cancer\x0bAn Network Study\x0b.pptx"
-        expected = "COLOMATE- Colorectal CancerAn Network Study.pptx"
+        filename = "Something\x0bAn Network Study\x0b.pptx"
+        expected = "SomethingAn Network Study.pptx"
         assert utils.sanitize_filename_for_header(filename) == expected
