@@ -13,7 +13,6 @@ import json
 import pytest
 import random
 
-
 _pytest_params = [
     pytest.param("db", marks=pytest.mark.app_settings({"cloud_datamanager": "db"})),
     pytest.param(
@@ -926,9 +925,7 @@ async def test_download_sanitizes_control_chars_in_filename(
         response, status = await requester(
             "POST",
             "/db/guillotina/",
-            data=json.dumps(
-                {"@type": "Item", "@behaviors": [IAttachment.__identifier__], "id": "foobar"}
-            ),
+            data=json.dumps({"@type": "Item", "@behaviors": [IAttachment.__identifier__], "id": "foobar"}),
         )
         assert status == 201
 
