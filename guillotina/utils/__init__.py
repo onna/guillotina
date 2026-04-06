@@ -36,6 +36,7 @@ from .misc import merge_dicts  # noqa
 from .misc import notice_on_error  # noqa
 from .misc import run_async  # noqa
 from .misc import safe_unidecode  # noqa
+from .misc import sanitize_filename_for_header  # noqa
 from .misc import strings_differ  # noqa
 from .misc import to_str  # noqa
 from .modules import get_caller_module  # noqa
