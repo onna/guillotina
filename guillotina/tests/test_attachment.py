@@ -873,7 +873,7 @@ async def test_delete_upload(manager_type, redis_container, container_requester)
         response, status = await requester(
             "POST",
             "/db/guillotina/",
-            data=json.dumps({"@type": "Item", "@behaviors": [IAttachment.__identifier__], "id": "foobar"}),
+            data=json.dumps({"@type": "Item", "@behaviors": [IAttachment.__identifier__], "id": "foobar",}),
         )
         assert status == 201
 
@@ -926,7 +926,7 @@ async def test_download_sanitizes_control_chars_in_filename(
         response, status = await requester(
             "POST",
             "/db/guillotina/",
-            data=json.dumps({"@type": "Item", "@behaviors": [IAttachment.__identifier__], "id": "foobar"}),
+            data=json.dumps({"@type": "Item", "@behaviors": [IAttachment.__identifier__], "id": "foobar",}),
         )
         assert status == 201
 
@@ -937,10 +937,7 @@ async def test_download_sanitizes_control_chars_in_filename(
             "PATCH",
             "/db/guillotina/foobar/@upload/file",
             data=b"test content",
-            headers={
-                "x-upload-size": "12",
-                "X-UPLOAD-FILENAME-B64": filename_b64,
-            },
+            headers={"x-upload-size": "12", "X-UPLOAD-FILENAME-B64": filename_b64,},
         )
         assert status == 200
 
