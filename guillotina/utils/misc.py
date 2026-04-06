@@ -29,7 +29,6 @@ import time
 import types
 import typing
 
-
 try:
     random = random.SystemRandom()  # type: ignore
     using_sys_random = True
@@ -43,9 +42,7 @@ logger = glogging.getLogger("guillotina")
 
 def sanitize_filename_for_header(filename: str) -> str:
     """Strip characters that break Content-Disposition header values."""
-    return "".join(
-        c for c in filename if ord(c) >= 0x20 and ord(c) != 0x7F and c not in '"\\'
-    )
+    return "".join(c for c in filename if ord(c) >= 0x20 and ord(c) != 0x7F and c not in '"\\')
 
 
 def strings_differ(string1: str, string2: str) -> bool:
