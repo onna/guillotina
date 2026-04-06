@@ -22,13 +22,13 @@ from guillotina.response import Response
 from guillotina.utils import apply_coroutine
 from guillotina.utils import get_object_url
 from guillotina.utils import resolve_dotted_name
+from guillotina.utils import sanitize_filename_for_header
 from zope.interface import alsoProvides
 
 import asyncio
 import base64
 import posixpath
 import uuid
-
 
 logger = glogging.getLogger("guillotina")
 
@@ -71,9 +71,8 @@ class FileManager(object):
         cors_renderer = app_settings["cors_renderer"](self.request)
         headers = await cors_renderer.get_headers()
         headers.update(extra_headers or {})
-        headers.update(
-            {"Content-Disposition": '{}; filename="{}"'.format(disposition, filename or file.filename)}
-        )
+        safe_name = sanitize_filename_for_header(filename or file.filename)
+        headers.update({"Content-Disposition": '{}; filename="{}"'.format(disposition, safe_name)})
 
         if kwargs.get("range_supported", True) and await self._range_supported():
             headers["Accept-Ranges"] = "bytes"

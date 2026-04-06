@@ -262,3 +262,37 @@ def test_bad_passphrase():
     assert not utils.secure_passphrase("secret")
     assert not utils.secure_passphrase("secret123")
     assert not utils.secure_passphrase("DKK@7328*!&@@")
+
+
+class TestSanitizeFilenameForHeader:
+    def test_normal_filename_unchanged(self):
+        assert utils.sanitize_filename_for_header("report.pdf") == "report.pdf"
+
+    def test_strips_vertical_tab(self):
+        assert utils.sanitize_filename_for_header("file\x0bname.pptx") == "filename.pptx"
+
+    def test_strips_null_byte(self):
+        assert utils.sanitize_filename_for_header("file\x00name.pdf") == "filename.pdf"
+
+    def test_strips_newline_and_carriage_return(self):
+        assert utils.sanitize_filename_for_header("file\nname\r.pdf") == "filename.pdf"
+
+    def test_strips_quotes_and_backslash(self):
+        assert utils.sanitize_filename_for_header('file"name\\.pdf') == "filename.pdf"
+
+    def test_strips_del(self):
+        assert utils.sanitize_filename_for_header("file\x7fname.pdf") == "filename.pdf"
+
+    def test_preserves_unicode(self):
+        assert utils.sanitize_filename_for_header("rapport-\u00e9t\u00e9.pdf") == "rapport-\u00e9t\u00e9.pdf"
+
+    def test_preserves_spaces_dots_parens_hyphens(self):
+        assert utils.sanitize_filename_for_header("my file (copy).pdf") == "my file (copy).pdf"
+
+    def test_empty_string(self):
+        assert utils.sanitize_filename_for_header("") == ""
+
+    def test_actual_bug_filename(self):
+        filename = "Something\x0bAn Network Study\x0b.pptx"
+        expected = "SomethingAn Network Study.pptx"
+        assert utils.sanitize_filename_for_header(filename) == expected
