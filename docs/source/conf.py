@@ -30,7 +30,7 @@
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-import pkg_resources
+from importlib.metadata import version as _dist_version
 from recommonmark.parser import CommonMarkParser
 from recommonmark.transform import AutoStructify
 
@@ -69,7 +69,7 @@ author = "Ramon Navarro Bosch & Nathan Van Gheem"
 # built documents.
 #
 # The short X.Y version.
-version = pkg_resources.get_distribution("guillotina").version.split(".dev")[0]
+version = _dist_version("guillotina").split(".dev")[0]
 # The full version, including alpha/beta/rc tags.
 release = version
 
