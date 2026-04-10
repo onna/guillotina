@@ -23,7 +23,7 @@ import asyncio
 import docutils.statemachine
 import json
 import logging
-import pkg_resources
+from importlib.metadata import version as _dist_version
 
 
 logger = logging.getLogger("guillotina.docs")
@@ -274,5 +274,4 @@ class APICall(Directive):
 
 def setup(app):
     app.add_directive_to_domain("http", "gapi", APICall)
-    dist = pkg_resources.get_distribution("guillotina")
-    return {"version": dist.version}
+    return {"version": _dist_version("guillotina")}
