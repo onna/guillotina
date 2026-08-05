@@ -240,10 +240,21 @@ class MemcachedDriver:
                 # cache hit
                 return item.value
 
+    async def _delete(self, client: emcache.Client, key: str) -> None:
+        with watch("delete") as w:
+            try:
+                await client.delete(safe_key(key), noreply=False)
+            except NotFoundCommandError:
+                # Deleting a key that is not cached is a no-op, not an error:
+                # cache invalidation is speculative and misses are expected.
+                # Relabel it as its own operation type (like get_miss) so it is
+                # recorded with error="none" instead of the generic "exception"
+                # label that the Memcached Errors alert watches.
+                w.labels["type"] = "delete_miss"
+
     async def delete(self, key: str) -> None:
         client = self._get_client()
-        with watch("delete"):
-            await client.delete(safe_key(key), noreply=False)
+        await self._delete(client, key)
 
     async def delete_all(self, keys: List[str]) -> None:
         if len(keys) == 0:
@@ -256,13 +267,10 @@ class MemcachedDriver:
         with watch("delete_many"):
             for key in keys:
                 try:
-                    with watch("delete"):
-                        await client.delete(safe_key(key), noreply=False)
-                    logger.debug("Deleted cache keys {}".format(keys))
-                except NotFoundCommandError:
-                    logger.debug("Key not found {}, nothing to delete".format(keys))
+                    await self._delete(client, key)
+                    logger.debug("Deleted cache key {}".format(key))
                 except Exception:
-                    logger.warning("Error deleting cache keys {}".format(keys), exc_info=True)
+                    logger.warning("Error deleting cache key {}".format(key), exc_info=True)
 
     async def flushall(self) -> None:
         client = self._get_client()

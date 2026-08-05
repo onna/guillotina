@@ -1,3 +1,4 @@
+from emcache.client_errors import NotFoundCommandError
 from guillotina.contrib.memcached.driver import MemcachedDriver
 from guillotina.contrib.memcached.driver import safe_key
 from guillotina.contrib.memcached.driver import update_connection_pool_metrics
@@ -157,6 +158,46 @@ async def test_delete_all_empty_keys():
             await driver.delete_all([])
             all_keys.observe.assert_not_called()
             watch_mocked.assert_not_called()
+
+
+def _raise_not_found(*args, **kwargs):
+    # emcache raises NotFoundCommandError when deleting a key that is not cached.
+    fut = asyncio.Future()
+    fut.set_exception(NotFoundCommandError())
+    return fut
+
+
+async def test_delete_miss_is_not_counted_as_error():
+    # Deleting a key that is not cached must be a no-op recorded as a
+    # non-error delete_miss (error="none"), never under the generic "exception"
+    # label that the Memcached Errors alert watches.
+    with mock.patch("guillotina.contrib.memcached.driver.MEMCACHED_OPS") as ops:
+        driver = MemcachedDriver()
+        driver._client = mock.Mock()
+        driver._client.delete = mock.Mock(side_effect=_raise_not_found)
+
+        # Must not propagate to the caller.
+        await driver.delete("foo")
+
+        driver._client.delete.assert_called_once_with(safe_key("foo"), noreply=False)
+        ops.labels.assert_called_once_with(error="none", type="delete_miss")
+
+
+async def test_delete_all_miss_is_not_counted_as_error():
+    with mock.patch("guillotina.contrib.memcached.driver.MEMCACHED_OPS") as ops:
+        with mock.patch("guillotina.contrib.memcached.driver.MEMCACHED_OPS_DELETE_ALL_NUM_KEYS"):
+            driver = MemcachedDriver()
+            driver._client = mock.Mock()
+            driver._client.delete = mock.Mock(side_effect=_raise_not_found)
+
+            # Must complete without raising even though every key misses.
+            await driver.delete_all(["foo", "bar"])
+
+            # No op is ever recorded under the alerting "exception" error label.
+            assert all(c.kwargs.get("error") != "exception" for c in ops.labels.call_args_list)
+            # Each per-key delete is recorded as a delete_miss.
+            delete_miss = [c for c in ops.labels.call_args_list if c.kwargs.get("type") == "delete_miss"]
+            assert len(delete_miss) == 2
 
 
 class TestUpdateConnectionPoolMetrics:
