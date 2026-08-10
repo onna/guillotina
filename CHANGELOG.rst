@@ -1,5 +1,11 @@
 CHANGELOG
 =========
+5.5.10 (2026-08-05)
+--------------------
+- Memcached driver: treat a delete of an uncached key (``NotFoundCommandError``)
+  as a non-error ``delete_miss`` instead of the generic ``exception`` label, so
+  speculative cache invalidation no longer inflates the memcached error ratio
+
 5.5.9 (2026-07-17)
 -------------------
 - Security: Always render error responses (status >= 400) as JSON, ignoring the
