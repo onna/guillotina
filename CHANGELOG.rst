@@ -1,5 +1,15 @@
 CHANGELOG
 =========
+5.5.11 (2026-10-23)
+--------------------
+- Downloads: a storage read that fails after the response headers are sent now
+  closes the connection and propagates, so the client sees a failed transfer and
+  the error is logged. Range downloads no longer swallow the error through a
+  ``return`` in ``finally``, and neither path appends a 500 response to a body
+  that is already streaming
+- Test ``InMemoryFileManager.read_range`` no longer raises ``RangeNotFound``
+  after a complete multi-chunk read or over-reads short ranges
+
 5.5.10 (2026-08-05)
 --------------------
 - Memcached driver: treat a delete of an uncached key (``NotFoundCommandError``)
