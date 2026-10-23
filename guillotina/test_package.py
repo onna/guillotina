@@ -426,11 +426,11 @@ class InMemoryFileManager:
         with open(_tmp_files[uri], "rb") as fi:
             fi.seek(start)
             while total < (end - start):
-                chunk = fi.read(1024 * 1024)
+                chunk = fi.read(min(1024 * 1024, (end - start) - total))
+                if not chunk:
+                    raise RangeNotFound(field=self.field, start=start, end=end)
                 total += len(chunk)
                 yield chunk
-        if len(chunk) != (end - start):
-            raise RangeNotFound(field=self.field, start=start, end=end)
 
     async def append(self, dm, iterable, offset) -> int:
         count = 0

@@ -2,10 +2,14 @@ from guillotina import task_vars
 from guillotina.behaviors.attachment import IAttachment
 from guillotina.behaviors.attachment import IMultiAttachment
 from guillotina.component import get_multi_adapter
+from guillotina.files.adapter import DBFileStorageManagerAdapter
 from guillotina.interfaces import IFileManager
+from guillotina.test_package import InMemoryFileManager
 from guillotina.tests import utils
 from guillotina.transactions import transaction
+from unittest import mock
 
+import aiohttp
 import asyncio
 import base64
 import hashlib
@@ -682,6 +686,107 @@ async def test_invalid_range_request_download(manager_type, redis_container, con
             headers={"Range": f"bytes={(1024 * 1024 * 5)}-{(1024 * 1024 * 7)}"},
         )
         assert status == 416
+
+
+@pytest.mark.parametrize("manager_type", _pytest_params)
+async def test_range_download_storage_error_fails_transfer(
+    manager_type, redis_container, container_requester, caplog
+):
+    async with container_requester as requester:
+        response, status = await requester(
+            "POST",
+            "/db/guillotina/",
+            data=json.dumps({"@type": "Item", "@behaviors": [IAttachment.__identifier__], "id": "foobar"}),
+        )
+        assert status == 201
+
+        response, status = await requester(
+            "POST",
+            "/db/guillotina/foobar/@tusupload/file",
+            headers={"UPLOAD-LENGTH": str(1024 * 1024 * 2), "TUS-RESUMABLE": "1.0.0"},
+        )
+        assert status == 201
+
+        for idx in range(2):
+            response, status = await requester(
+                "PATCH",
+                "/db/guillotina/foobar/@tusupload/file",
+                headers={
+                    "CONTENT-LENGTH": str(1024 * 1024 * 1),
+                    "TUS-RESUMABLE": "1.0.0",
+                    "upload-offset": str(1024 * 1024 * idx),
+                },
+                data=str(idx).encode("ascii") * 1024 * 1024 * 1,
+            )
+            assert status == 200
+
+        async def failing_read_range(self, start, end):
+            yield b"0" * 1024
+            raise ConnectionError("storage read failed")
+
+        with mock.patch.object(
+            DBFileStorageManagerAdapter, "read_range", failing_read_range
+        ), mock.patch.object(InMemoryFileManager, "read_range", failing_read_range):
+            with pytest.raises(aiohttp.ClientPayloadError):
+                await asyncio.wait_for(
+                    requester.make_request(
+                        "GET", "/db/guillotina/foobar/@download/file", headers={"Range": "bytes=0-"}
+                    ),
+                    timeout=10,
+                )
+
+        assert any(
+            record.exc_info and str(record.exc_info[1]) == "storage read failed" for record in caplog.records
+        )
+
+
+@pytest.mark.parametrize("manager_type", _pytest_params)
+async def test_download_storage_error_fails_transfer(
+    manager_type, redis_container, container_requester, caplog
+):
+    async with container_requester as requester:
+        response, status = await requester(
+            "POST",
+            "/db/guillotina/",
+            data=json.dumps({"@type": "Item", "@behaviors": [IAttachment.__identifier__], "id": "foobar"}),
+        )
+        assert status == 201
+
+        response, status = await requester(
+            "POST",
+            "/db/guillotina/foobar/@tusupload/file",
+            headers={"UPLOAD-LENGTH": str(1024 * 1024 * 2), "TUS-RESUMABLE": "1.0.0"},
+        )
+        assert status == 201
+
+        for idx in range(2):
+            response, status = await requester(
+                "PATCH",
+                "/db/guillotina/foobar/@tusupload/file",
+                headers={
+                    "CONTENT-LENGTH": str(1024 * 1024 * 1),
+                    "TUS-RESUMABLE": "1.0.0",
+                    "upload-offset": str(1024 * 1024 * idx),
+                },
+                data=str(idx).encode("ascii") * 1024 * 1024 * 1,
+            )
+            assert status == 200
+
+        async def failing_iter_data(self, **kwargs):
+            yield b"0" * 1024
+            raise ConnectionError("storage read failed")
+
+        with mock.patch.object(
+            DBFileStorageManagerAdapter, "iter_data", failing_iter_data
+        ), mock.patch.object(InMemoryFileManager, "iter_data", failing_iter_data):
+            with pytest.raises(aiohttp.ClientPayloadError):
+                await asyncio.wait_for(
+                    requester.make_request("GET", "/db/guillotina/foobar/@download/file"), timeout=10,
+                )
+
+        assert any(
+            record.exc_info and str(record.exc_info[1]) == "storage read failed" for record in caplog.records
+        )
 
 
 @pytest.mark.parametrize("manager_type", _pytest_params)
