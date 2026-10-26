@@ -202,7 +202,7 @@ class FileManager(object):
                     headers={"Content-Range": f"bytes */{file.size}"},
                 )
             await download_resp.write_eof()
-        except (asyncio.CancelledError, ConnectionRefusedError, ConnectionResetError):  # pragma: no cover
+        except (asyncio.CancelledError, ConnectionError):
             logger.info(f"Range cancelled: {range_request} {self.request}")
             # when supporting range headers, the browser will
             # cancel downloads. This is fine.
@@ -241,12 +241,11 @@ class FileManager(object):
                     )
                 await download_resp.write(chunk)
                 await download_resp.drain()
-        except (asyncio.CancelledError, ConnectionRefusedError, ConnectionResetError):  # pragma: no cover
+        except (asyncio.CancelledError, ConnectionError):
             logger.info(f"Download cancelled: {self.request}")
             # when supporting range headers, the browser will
             # cancel downloads. This is fine.
-            if download_resp is None:
-                raise HTTPClientClosedRequest()
+            raise HTTPClientClosedRequest()
         except Exception:
             transport = self.request.transport
             if download_resp is not None and transport is not None:
