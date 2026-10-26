@@ -209,7 +209,10 @@ class FileManager(object):
             raise HTTPClientClosedRequest()
         except Exception:
             transport = self.request.transport
-            if download_resp is not None and transport is not None:
+            if transport is None:
+                logger.info(f"Range cancelled: {range_request} {self.request}")
+                raise HTTPClientClosedRequest()
+            if download_resp is not None:
                 transport.close()
             raise
         return download_resp
@@ -245,11 +248,13 @@ class FileManager(object):
             logger.info(f"Download cancelled: {self.request}")
             # when supporting range headers, the browser will
             # cancel downloads. This is fine.
-            if download_resp is None:
-                raise HTTPClientClosedRequest()
+            raise HTTPClientClosedRequest()
         except Exception:
             transport = self.request.transport
-            if download_resp is not None and transport is not None:
+            if transport is None:
+                logger.info(f"Download cancelled: {self.request}")
+                raise HTTPClientClosedRequest()
+            if download_resp is not None:
                 transport.close()
             raise
         else:

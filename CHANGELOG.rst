@@ -1,5 +1,12 @@
 CHANGELOG
 =========
+5.5.12 (2026-10-26)
+--------------------
+- Downloads: a client that disconnects mid-download is treated as a cancel
+  (499, info log) instead of an error. aiohttp 3.14 reports the disconnect as a
+  plain ``ConnectionError("Connection lost")``, which the cancel clause did not
+  catch, so 5.5.11 logged it as a view error with a 500
+
 5.5.11 (2026-10-23)
 --------------------
 - Downloads: a storage read that fails after the response headers are sent now
