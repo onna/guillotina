@@ -5,7 +5,9 @@ CHANGELOG
 - Downloads: a client that disconnects mid-download is treated as a cancel
   (499, info log) instead of an error. aiohttp 3.14 reports the disconnect as a
   plain ``ConnectionError("Connection lost")``, which the cancel clause did not
-  catch, so 5.5.11 logged it as a view error with a 500
+  catch, so 5.5.11 logged it as a view error with a 500. Both cancel clauses now
+  catch ``ConnectionError``, and a cancelled full download always returns 499
+  instead of falling through
 
 5.5.11 (2026-10-23)
 --------------------

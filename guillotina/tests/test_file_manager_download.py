@@ -2,11 +2,12 @@ from guillotina.files.manager import FileManager
 from guillotina.response import HTTPClientClosedRequest
 from unittest import mock
 
+import aiohttp
 import logging
 import pytest
 
 
-def _file_manager(range_header, transport):
+def _file_manager(range_header, transport, read_error=None, write_error=None):
     manager = FileManager.__new__(FileManager)
     manager.context = mock.MagicMock()
     manager.field = mock.MagicMock()
@@ -17,13 +18,16 @@ def _file_manager(range_header, transport):
 
     async def data(*args, **kwargs):
         yield b"0" * 1024
+        if read_error is not None:
+            raise read_error
+        yield b"0" * 1024
 
     manager.file_storage_manager = mock.MagicMock(
         iter_data=data, read_range=data, range_supported=mock.AsyncMock(return_value=True)
     )
 
     download_resp = mock.MagicMock()
-    download_resp.write = mock.AsyncMock(side_effect=ConnectionError("Connection lost"))
+    download_resp.write = mock.AsyncMock(side_effect=write_error)
     download_resp.drain = mock.AsyncMock()
     download_resp.write_eof = mock.AsyncMock()
     manager.prepare_download = mock.AsyncMock(return_value=download_resp)
@@ -31,9 +35,13 @@ def _file_manager(range_header, transport):
 
 
 @pytest.mark.parametrize("range_header", [None, "bytes=0-"])
-async def test_download_client_gone_is_a_cancel(range_header, caplog):
+@pytest.mark.parametrize(
+    "write_error",
+    [ConnectionError("Connection lost"), ConnectionResetError("Cannot write to closing transport")],
+)
+async def test_download_client_disconnect_is_a_cancel(range_header, write_error, caplog):
     caplog.set_level(logging.INFO)
-    manager = _file_manager(range_header, transport=None)
+    manager = _file_manager(range_header, transport=None, write_error=write_error)
 
     with pytest.raises(HTTPClientClosedRequest):
         await manager.download()
@@ -43,11 +51,24 @@ async def test_download_client_gone_is_a_cancel(range_header, caplog):
 
 
 @pytest.mark.parametrize("range_header", [None, "bytes=0-"])
-async def test_download_write_error_with_client_connected_closes_connection(range_header):
+async def test_download_storage_error_closes_connection(range_header):
     transport = mock.MagicMock()
-    manager = _file_manager(range_header, transport=transport)
+    error = aiohttp.ClientPayloadError("storage read failed")
+    manager = _file_manager(range_header, transport=transport, read_error=error)
 
-    with pytest.raises(ConnectionError):
+    with pytest.raises(aiohttp.ClientPayloadError):
         await manager.download()
 
     transport.close.assert_called_once()
+
+
+@pytest.mark.parametrize("range_header", [None, "bytes=0-"])
+async def test_download_storage_error_after_client_left_is_not_a_cancel(range_header, caplog):
+    caplog.set_level(logging.INFO)
+    error = aiohttp.ClientPayloadError("storage read failed")
+    manager = _file_manager(range_header, transport=None, read_error=error)
+
+    with pytest.raises(aiohttp.ClientPayloadError):
+        await manager.download()
+
+    assert not any("cancelled" in record.getMessage() for record in caplog.records)

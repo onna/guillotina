@@ -722,7 +722,7 @@ async def test_range_download_storage_error_fails_transfer(
 
         async def failing_read_range(self, start, end):
             yield b"0" * 1024
-            raise ConnectionError("storage read failed")
+            raise aiohttp.ClientPayloadError("storage read failed")
 
         with mock.patch.object(
             DBFileStorageManagerAdapter, "read_range", failing_read_range
@@ -774,7 +774,7 @@ async def test_download_storage_error_fails_transfer(
 
         async def failing_iter_data(self, **kwargs):
             yield b"0" * 1024
-            raise ConnectionError("storage read failed")
+            raise aiohttp.ClientPayloadError("storage read failed")
 
         with mock.patch.object(
             DBFileStorageManagerAdapter, "iter_data", failing_iter_data
